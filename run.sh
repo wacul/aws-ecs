@@ -80,6 +80,9 @@ if [ -z "$WERCKER_AWS_ECS_SERVICE_NAME" ]; then
     --task-definition-name "$WERCKER_AWS_ECS_TASK_DEFINITION_NAME" \
     --task-definition-file "$WERCKER_AWS_ECS_TASK_DEFINITION_FILE"
 else
+  if [ "$WERCKER_DOWNSCALE_TASKS" == 'true' ]; then
+    DOWNSCALE_TASKS='--downscale-tasks'
+  fi
   python "$WERCKER_STEP_ROOT/main.py" \
     --key "$WERCKER_AWS_ECS_KEY" \
     --secret "$WERCKER_AWS_ECS_SECRET" \
@@ -89,9 +92,7 @@ else
     --task-definition-file "$WERCKER_AWS_ECS_TASK_DEFINITION_FILE" \
     --service-name "$WERCKER_AWS_ECS_SERVICE_NAME" \
     --service-desired-count "$WERCKER_SERVICE_DESIRED_COUNT" \
-  if [ "$WERCKER_DOWNSCALE_TASKS" == true  ];then   
-    --downscale-tasks \
-  fi
+    $DOWNSCALE_TASKS \
     --minimum-running-tasks "${WERCKER_AWS_ECS_MINIMUM_RUNNING_TASKS:-1}"
 fi
 
