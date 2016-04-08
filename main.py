@@ -74,7 +74,7 @@ try:
             delta = 1
         else:
             h1("Step 5: Downscale ECS Service")
-            success("Downscaling service is not necessary (not enough tasks are running)")
+            success("Downscaling service is not necessary")
             delta = args.minimum_running_tasks - original_running_count
 
         # Step: Update ECS Service
