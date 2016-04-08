@@ -92,17 +92,19 @@ The following example deploy an `hello` service on ECS :
 ```
 deploy:
   steps:
-    - 1science/aws-ecs:
+    - wacul/aws-ecs:
         key: aws_access_key_id
         secret: aws_access_secret_id
         cluster-name: staging
         task-definition-name: hello-migrate-db
         task-definition-file: /app/hello-migrate-db-task-definition.json
-    - 1science/aws-ecs:
+    - wacul/aws-ecs:
         key: aws_access_key_id
         secret: aws_access_secret_id
         cluster-name: staging
         service-name: hello
+        service-desired-count: 2
+        downscale-tasks: false
         task-definition-name: hello
         task-definition-file: /app/hello-task-definition.json
 ```

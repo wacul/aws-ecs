@@ -5,6 +5,7 @@ import sys
 import argparse
 
 from ecs import ECSService
+from ecs import ServiceNotFoundException
 
 logging.basicConfig(stream=sys.stdout, level=logging.INFO, format='%(message)s')
 logging.getLogger("botocore").setLevel(logging.WARNING)
@@ -22,6 +23,11 @@ parser.add_argument('--cluster-name', dest='cluster_name', required=True)
 parser.add_argument('--task-definition-name', dest='task_definition_name', required=True)
 parser.add_argument('--task-definition-file', dest='task_definition_file', required=True)
 parser.add_argument('--service-name', dest='service_name', required=False)
+parser.add_argument('--service-desired-count', type=int, dest='service_desired_count', required=False)
+parser.add_argument('--service-maximum-percent', type=int, dest='service_maximum_percent', default=200, required=False)
+parser.add_argument('--service-minimum-percent', type=int, dest='service_minimum_percent', default=50, required=False)
+parser.add_argument('--downscale-tasks', dest='downscale_tasks', default=False, action='store_true', required=False)
+parser.add_argument('--no-downscale-tasks', dest='downscale_tasks', default=False, action='store_false', required=False)
 parser.add_argument('--minimum-running-tasks', type=int, dest='minimum_running_tasks', default=1, required=False)
 args = parser.parse_args()
 
@@ -39,13 +45,6 @@ try:
     ecs.describe_cluster(cluster=args.cluster_name)
     success("Checking cluster '%s' succeeded" % args.cluster_name)
 
-    # Step: Check ECS Service
-    if serviceMode:
-        h1("Step: Check ECS Service")
-        response = ecs.describe_service(cluster=args.cluster_name, service=args.service_name)
-        original_running_count = (response.get('services')[0]).get('runningCount')
-        success("Checking service '%s' succeeded (%d tasks running)" % (args.service_name, original_running_count))
-
     # Step: Register New Task Definition
     h1("Step: Register New Task Definition")
     response = ecs.register_task_definition(family=args.task_definition_name, file=args.task_definition_file)
@@ -53,9 +52,20 @@ try:
     success("Registering task definition '%s' succeeded" % task_definition_arn)
 
     if serviceMode:
+        h1("Step: Check ECS Service")
+        try:
+            response = ecs.describe_service(cluster=args.cluster_name, service=args.service_name)
+        except ServiceNotFoundException:
+            error("Service not Found.")
+            h1("Step: Create ECS Service")
+            response = ecs.create_service(cluster=args.cluster_name, service=args.service_name, taskDefinition=task_definition_arn, desiredCount=args.service_desired_count, maximumPercent=args.service_maximum_percent, minimumPercent=ars.service_minimum_percent)
+        except:
+            raise
+        original_running_count = (response.get('services')[0]).get('runningCount')
+        success("Checking service '%s' succeeded (%d tasks running)" % (args.service_name, original_running_count))
 
         # Step: Downscale ECS Service if necessary
-        if original_running_count >= args.minimum_running_tasks:
+        if args.downscale_tasks and original_running_count >= args.minimum_running_tasks:
             h1("Step: Downscale ECS Service")
             response = ecs.downscale_service(cluster=args.cluster_name, service=args.service_name)
             downscale_running_count = (response.get('services')[0]).get('runningCount')

@@ -5,9 +5,14 @@ import os
 
 from boto3 import Session
 
+class ServiceNotFoundException(Exception):
+    def __init__(self, value):
+        self.value = value
+    def __str__(self):
+        return repr(self.value)
+
 
 class ECSService(object):
-
     def __init__(self, access_key, secret_key, region='us-east-1'):
         session = Session(aws_access_key_id=access_key, aws_secret_access_key=secret_key, region_name=region)
         self.client = session.client('ecs')
@@ -32,6 +37,32 @@ class ECSService(object):
         :return: the response or raise an Exception
         """
         response = self.client.describe_services(cluster=cluster, services=[service])
+        failures = response.get('failures')
+        if failures:
+            raise ServiceNotFoundException("Service '%s' is %s in cluster '%s'" % (service, failures[0].get('reason'), cluster))
+        return response
+
+    def create_service(self, cluster, service, taskDefinition, desiredCount, maximumPercent, minimumPercent):
+        """
+        Create service
+        :param cluster: the cluster name
+        :param service: the service name
+        :param taskDefinition: taskDefinition
+        :param desiredCount: desiredCount
+        :param maximumPercent: maximumPercent
+        :param minimumHealthyPercent: minimumHealthyPercent
+        :return: the response or raise an Exception
+        """
+        response = self.client.create_service(
+            cluster=cluster,
+            serviceName=service,
+            taskDefinition=taskDefinition,
+            desiredCount=desiredCount,
+            deploymentConfiguration={
+                'maximumPercent': maximumPercent,
+                'minimumHealthyPercent': minimumHealthyPercent
+            }
+        )
         failures = response.get('failures')
         if failures:
             raise Exception("Service '%s' is %s in cluster '%s'" % (service, failures[0].get('reason'), cluster))

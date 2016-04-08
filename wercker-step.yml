@@ -1,5 +1,5 @@
 name: aws-ecs
-version: 0.2.9
+version: 0.3.0
 description: Deploy service to ECS
 keywords:
   - aws
@@ -31,6 +31,16 @@ properties:
   service-name:
     type: string
     required: true
+  service-file:
+    type: string
+    required: true
+  service-desired-count:
+    type: int
+    required: true 
+  downscale-tasks:
+    type: bool
+    default: false
+    required: false
   minimum-running-tasks:
     type: int
     required: false
