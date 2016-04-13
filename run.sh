@@ -37,7 +37,7 @@ if ! type_exists 'pip'; then
 fi
 
 # Install python dependencies
-INSTALL_DEPENDENCIES=$(pip install --upgrade -r $WERCKER_STEP_ROOT/requirements.txt 2>&1)
+INSTALL_DEPENDENCIES=$(pip install -r $WERCKER_STEP_ROOT/requirements.txt 2>&1)
 if [ $? -ne 0 ]; then
   error "Unable to install dependencies"
   warn "$INSTALL_DEPENDENCIES"
