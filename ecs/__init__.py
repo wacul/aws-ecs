@@ -3,6 +3,10 @@ from __future__ import unicode_literals
 import json
 import os
 
+import yaml
+import jinja2
+import jinja2.loaders
+
 from boto3 import Session
 
 class ServiceNotFoundException(Exception):
@@ -10,6 +14,47 @@ class ServiceNotFoundException(Exception):
         self.value = value
     def __str__(self):
         return repr(self.value)
+
+class FilePathLoader(jinja2.BaseLoader):
+    """ Custom Jinja2 template loader which just loads a single template file """
+
+    def __init__(self, cwd, encoding='utf-8'):
+        self.cwd = cwd
+        self.encoding = encoding
+
+    def get_source(self, environment, template):
+        # Path
+        filename = os.path.join(self.cwd, template)
+
+        # Read
+        try:
+            with open(template, 'r') as f:
+                contents = f.read().decode(self.encoding)
+        except IOError:
+            raise jinja2.TemplateNotFound(template)
+
+        # Finish
+        uptodate = lambda: False
+        return contents, filename, uptodate
+
+def render_template(cwd, template_path, context):
+    """ Render a template
+    :param template_path: Path to the template file
+    :type template_path: basestring
+    :param context: Template data
+    :type context: dict
+    :return: Rendered template
+    :rtype: basestring
+    """
+    env = jinja2.Environment(
+        loader=FilePathLoader(cwd),
+        undefined=jinja2.StrictUndefined # raises errors for undefined variables
+    )
+
+    return env \
+        .get_template(template_path) \
+        .render(context) \
+        .encode('utf-8')
 
 
 class ECSService(object):
@@ -42,7 +87,7 @@ class ECSService(object):
             raise ServiceNotFoundException("Service '%s' is %s in cluster '%s'" % (service, failures[0].get('reason'), cluster))
         return response
 
-    def create_service(self, cluster, service, taskDefinition, desiredCount, maximumPercent, minimumPercent):
+    def create_service(self, cluster, service, taskDefinition, desiredCount, maximumPercent, minimumHealthyPercent):
         """
         Create service
         :param cluster: the cluster name
@@ -66,20 +111,40 @@ class ECSService(object):
         failures = response.get('failures')
         if failures:
             raise Exception("Service '%s' is %s in cluster '%s'" % (service, failures[0].get('reason'), cluster))
-        return response
 
-    def register_task_definition(self, family, file):
+        # Waiting for the service update is done
+        waiter = self.client.get_waiter('services_stable')
+        waiter.wait(cluster=cluster, services=[service])
+        return self.describe_service(cluster=cluster, service=service)
+
+    def register_task_definition(self, family, file, template, template_yaml):
         """
         Register the task definition contained in the file
         :param family: the task definition name
         :param file: the task definition content file
         :return: the response or raise an Exception
         """
-        if os.path.isfile(file) is False:
-            raise IOError('The task definition file does not exist')
+        if file:
+            if os.path.isfile(file) is False:
+                raise IOError('The task definition file does not exist')
 
-        with open(file, 'r') as content_file:
-            container_definitions = json.loads(content_file.read())
+            with open(file, 'r') as content_file:
+                container_definitions = json.loads(content_file.read())
+        elif template:
+            if os.path.isfile(template) is False:
+                raise IOError('The task definition template does not exist')
+            if os.path.isfile(template_yaml) is False:
+                raise IOError('The task definition yaml does not exist')
+
+            # Read yaml
+            with open(template_yaml, 'r') as template_yaml_data:
+                context = yaml.load(template_yaml_data)
+            # Render
+            render_definition = render_template(os.getcwd(), template, context)
+
+            container_definitions = json.loads(render_definition)
+        else:
+            raise Exception('The task definition does not exist')
 
         response = self.client.register_task_definition(family=family, containerDefinitions=container_definitions)
         task_definition = response.get('taskDefinition')
