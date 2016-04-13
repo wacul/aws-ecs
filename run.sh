@@ -68,8 +68,8 @@ fi
 if [ -z "$WERCKER_AWS_ECS_TASK_DEFINITION_FILE" -a -z "$WERCKER_AWS_ECS_TASK_DEFINITION_TEMPLATE" ]; then
   error "Please set the task-definition variable"
   exit 1
-elif [ ! -z "$WERCKER_AWS_ECS_TASK_DEFINITION_TEMPLATE" -a -z "$WERCKER_AWS_ECS_TASK_DEFINITION_TEMPLATE_YAML" ];then
-  error "'task-definition-template' requires 'task-definition-template-yaml'"
+elif [ ! -z "$WERCKER_AWS_ECS_TASK_DEFINITION_TEMPLATE" -a -z "$WERCKER_AWS_ECS_TASK_DEFINITION_TEMPLATE_YAML" -a -z "$WERCKER_AWS_ECS_TASK_DEFINITION_TEMPLATE_JSON" ];then
+  error "'task-definition-template' requires 'task-definition-template-yaml' or 'task-definition-template-json'"
   exit 1
 fi
 
@@ -84,7 +84,8 @@ if [ -z "$WERCKER_AWS_ECS_SERVICE_NAME" ]; then
     --task-definition-name "$WERCKER_AWS_ECS_TASK_DEFINITION_NAME" \
     --task-definition-file "$WERCKER_AWS_ECS_TASK_DEFINITION_FILE" \
     --task-definition-template "$WERCKER_AWS_ECS_TASK_DEFINITION_TEMPLATE" \
-    --task-definition-template-yaml "$WERCKER_AWS_ECS_TASK_DEFINITION_TEMPLATE_YAML"
+    --task-definition-template-yaml "$WERCKER_AWS_ECS_TASK_DEFINITION_TEMPLATE_YAML" \
+    --task-definition-template-json "$WERCKER_AWS_ECS_TASK_DEFINITION_TEMPLATE_JSON"
 else
   if [ "$WERCKER_DOWNSCALE_TASKS" == 'true' ]; then
     DOWNSCALE_TASKS='--downscale-tasks'
@@ -98,6 +99,7 @@ else
     --task-definition-file "$WERCKER_AWS_ECS_TASK_DEFINITION_FILE" \
     --task-definition-template "$WERCKER_AWS_ECS_TASK_DEFINITION_TEMPLATE" \
     --task-definition-template-yaml "$WERCKER_AWS_ECS_TASK_DEFINITION_TEMPLATE_YAML" \
+    --task-definition-template-json "$WERCKER_AWS_ECS_TASK_DEFINITION_TEMPLATE_JSON" \
     --service-name "$WERCKER_AWS_ECS_SERVICE_NAME" \
     --service-desired-count "$WERCKER_AWS_ECS_SERVICE_DESIRED_COUNT" \
     $DOWNSCALE_TASKS \

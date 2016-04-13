@@ -104,7 +104,7 @@ deploy:
         cluster-name: staging
         task-definition-name: hello-migrate-db
         task-definition-template: /app/hello-migrate-db-task-definition.json.tmpl
-        task-definition-template-yaml: /conf/dev.yaml
+        task-definition-template-json: /conf/dev.json
     - wacul/aws-ecs:
         key: aws_access_key_id
         secret: aws_access_secret_id
@@ -114,5 +114,5 @@ deploy:
         downscale-tasks: false
         task-definition-name: hello
         task-definition-template: /app/hello-migrate-db-task-definition.json.tmpl
-        task-definition-template-yaml: /conf/dev.yaml
+        task-definition-template-json: /conf/dev.json
 ```
