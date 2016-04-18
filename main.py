@@ -66,9 +66,14 @@ try:
             create_service = True
         except:
             raise
-        if response['services'][0]['status'] == 'INACTIVE':
-            error("Service status is INACTIVE.")
+        try:
+            if response['services'][0]['status'] == 'INACTIVE':
+                error("Service status is INACTIVE.")
+                create_service = True
+        except KeyError:
             create_service = True
+        except:
+            raise
 
         if create_service:
             h1("Step: Create ECS Service")
