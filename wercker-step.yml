@@ -1,5 +1,5 @@
 name: aws-ecs
-version: 0.3.7
+version: 0.3.8
 description: Deploy service to ECS
 keywords:
   - aws
@@ -35,9 +35,6 @@ properties:
     type: string
     required: true
   service-file-template:
-    type: string
-    required: true
-  service-file-template-yaml:
     type: string
     required: true
   service-file-template-json:
