@@ -3,7 +3,6 @@ from __future__ import unicode_literals
 import json
 import os
 
-import yaml
 import jinja2
 import jinja2.loaders
 
@@ -117,13 +116,12 @@ class ECSService(object):
         waiter.wait(cluster=cluster, services=[service])
         return self.describe_service(cluster=cluster, service=service)
 
-    def register_task_definition(self, family, file, template, template_yaml, template_json):
+    def register_task_definition(self, family, file, template, template_json):
         """
         Register the task definition contained in the file
         :param family: the task definition name
         :param file: the task definition content file
         :param template: the task definition template
-        :param template_yaml: the task definition template yaml
         :param template_json: the task definition template json
         :return: the response or raise an Exception
         """
@@ -136,20 +134,13 @@ class ECSService(object):
         elif template:
             if os.path.isfile(template) is False:
                 raise IOError('The task definition template does not exist')
-            if template_yaml:
-                if os.path.isfile(template_yaml) is False:
-                    raise IOError('The task definition yaml does not exist')
-                else:
-                    with open(template_yaml, 'r') as template_yaml_data:
-                        context = yaml.load(template_yaml_data)
             elif template_json:
                 if os.path.isfile(template_json) is False:
                     raise IOError('The task definition json does not exist')
                 else:
                     with open(template_json, 'r') as template_json_data:
-                        context = yaml.load(template_json_data)
+                        context = json.load(template_json_data)
 
-            # Read yaml
             # Render
             render_definition = render_template(os.getcwd(), template, context)
 

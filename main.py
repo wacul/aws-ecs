@@ -23,7 +23,6 @@ parser.add_argument('--cluster-name', dest='cluster_name', required=True)
 parser.add_argument('--task-definition-name', dest='task_definition_name', required=True)
 parser.add_argument('--task-definition-file', dest='task_definition_file', required=True)
 parser.add_argument('--task-definition-template', dest='task_definition_template', required=True)
-parser.add_argument('--task-definition-template-yaml', dest='task_definition_template_yaml', required=True)
 parser.add_argument('--task-definition-template-json', dest='task_definition_template_json', required=True)
 parser.add_argument('--service-name', dest='service_name', required=False)
 parser.add_argument('--service-desired-count', type=int, dest='service_desired_count', required=False)
@@ -50,7 +49,7 @@ try:
 
     # Step: Register New Task Definition
     h1("Step: Register New Task Definition")
-    response = ecs.register_task_definition(family=args.task_definition_name, file=args.task_definition_file, template=args.task_definition_template, template_yaml=args.task_definition_template_yaml, template_json=args.task_definition_template_json)
+    response = ecs.register_task_definition(family=args.task_definition_name, file=args.task_definition_file, template=args.task_definition_template, template_json=args.task_definition_template_json)
     task_definition_arn = response.get('taskDefinition').get('taskDefinitionArn')
     success("Registering task definition '%s' succeeded" % task_definition_arn)
 
