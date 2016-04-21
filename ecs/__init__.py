@@ -36,6 +36,24 @@ class FilePathLoader(jinja2.BaseLoader):
         uptodate = lambda: False
         return contents, filename, uptodate
 
+def parse_env(data_string):
+    # Parse
+    if isinstance(data_string, basestring):
+        data = filter(
+            lambda l: len(l) == 2 ,
+            (
+                map(
+                    str.strip,
+                    line.split('=')
+                )
+                for line in data_string.split("\n"))
+        )
+    else:
+        data = data_string
+
+    # Finish
+    return data
+
 def render_template(cwd, template_path, context):
     """ Render a template
     :param template_path: Path to the template file
@@ -116,13 +134,14 @@ class ECSService(object):
         waiter.wait(cluster=cluster, services=[service])
         return self.describe_service(cluster=cluster, service=service)
 
-    def register_task_definition(self, family, file, template, template_json):
+    def register_task_definition(self, family, file, template, template_json, template_env):
         """
         Register the task definition contained in the file
         :param family: the task definition name
         :param file: the task definition content file
         :param template: the task definition template
         :param template_json: the task definition template json
+        :param template_env: the task definition template env
         :return: the response or raise an Exception
         """
         if file:
@@ -132,6 +151,7 @@ class ECSService(object):
             with open(file, 'r') as content_file:
                 container_definitions = json.loads(content_file.read())
         elif template:
+            context = {}
             if os.path.isfile(template) is False:
                 raise IOError('The task definition template does not exist')
             elif template_json:
@@ -139,7 +159,10 @@ class ECSService(object):
                     raise IOError('The task definition json does not exist')
                 else:
                     with open(template_json, 'r') as template_json_data:
-                        context = json.load(template_json_data)
+                        context.update(json.load(template_json_data))
+            if template_env:
+                context.update(parse_env(os.environ))
+            print(context)
 
             # Render
             render_definition = render_template(os.getcwd(), template, context)

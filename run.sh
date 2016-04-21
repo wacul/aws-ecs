@@ -76,6 +76,9 @@ fi
 
 
 if [ -z "$WERCKER_AWS_ECS_SERVICE_NAME" ]; then
+  if [ "$WERCKER_AWS_ECS_TASK_DEFINITION_TEMPLATE_ENV" == 'false' ]; then
+    NO_TASK_DEFINITION_TEMPLATE_ENV='--no-task-definition-template-env'
+  fi
   python "$WERCKER_STEP_ROOT/main.py" \
     --key "$WERCKER_AWS_ECS_KEY" \
     --secret "$WERCKER_AWS_ECS_SECRET" \
@@ -84,8 +87,12 @@ if [ -z "$WERCKER_AWS_ECS_SERVICE_NAME" ]; then
     --task-definition-name "$WERCKER_AWS_ECS_TASK_DEFINITION_NAME" \
     --task-definition-file "$WERCKER_AWS_ECS_TASK_DEFINITION_FILE" \
     --task-definition-template "$WERCKER_AWS_ECS_TASK_DEFINITION_TEMPLATE" \
+    $NO_TASK_DEFINITION_TEMPLATE_ENV \
     --task-definition-template-json "$WERCKER_AWS_ECS_TASK_DEFINITION_TEMPLATE_JSON"
 else
+  if [ "$WERCKER_AWS_ECS_TASK_DEFINITION_TEMPLATE_ENV" == 'false' ]; then
+    TASK_DEFINITION_TEMPLATE_ENV='--no-task-definition-template-env'
+  fi
   if [ "$WERCKER_DOWNSCALE_TASKS" == 'true' ]; then
     DOWNSCALE_TASKS='--downscale-tasks'
   fi
@@ -97,6 +104,7 @@ else
     --task-definition-name "$WERCKER_AWS_ECS_TASK_DEFINITION_NAME" \
     --task-definition-file "$WERCKER_AWS_ECS_TASK_DEFINITION_FILE" \
     --task-definition-template "$WERCKER_AWS_ECS_TASK_DEFINITION_TEMPLATE" \
+    $NO_TASK_DEFINITION_TEMPLATE_ENV \
     --task-definition-template-json "$WERCKER_AWS_ECS_TASK_DEFINITION_TEMPLATE_JSON" \
     --service-name "$WERCKER_AWS_ECS_SERVICE_NAME" \
     --service-desired-count "$WERCKER_AWS_ECS_SERVICE_DESIRED_COUNT" \
