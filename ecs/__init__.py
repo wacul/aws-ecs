@@ -162,7 +162,6 @@ class ECSService(object):
                         context.update(json.load(template_json_data))
             if template_env:
                 context.update(parse_env(os.environ))
-            print(context)
 
             # Render
             render_definition = render_template(os.getcwd(), template, context)
