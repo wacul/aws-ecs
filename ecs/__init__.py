@@ -155,9 +155,7 @@ class ECSService(object):
             if os.path.isfile(template) is False:
                 raise IOError('The task definition template does not exist')
             elif template_json:
-                if os.path.isfile(template_json) is False:
-                    raise IOError('The task definition json does not exist')
-                else:
+                if os.path.isfile(template_json):
                     with open(template_json, 'r') as template_json_data:
                         context.update(json.load(template_json_data))
             if template_env:

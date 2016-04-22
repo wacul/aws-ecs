@@ -68,9 +68,6 @@ fi
 if [ -z "$WERCKER_AWS_ECS_TASK_DEFINITION_FILE" -a -z "$WERCKER_AWS_ECS_TASK_DEFINITION_TEMPLATE" ]; then
   error "Please set the task-definition variable"
   exit 1
-elif [ ! -z "$WERCKER_AWS_ECS_TASK_DEFINITION_TEMPLATE" -a -z "$WERCKER_AWS_ECS_TASK_DEFINITION_TEMPLATE_JSON" ];then
-  error "'task-definition-template' requires 'task-definition-template-json'"
-  exit 1
 fi
 
 
