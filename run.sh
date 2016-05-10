@@ -60,19 +60,19 @@ if [ -z "$WERCKER_AWS_ECS_CLUSTER_NAME" ]; then
   exit 1
 fi
 
-if [ -z "$WERCKER_AWS_ECS_TASK_DEFINITION_NAME" ]; then
-  error "Please set the 'task-definition-name' variable"
+if [ -z "$WERCKER_AWS_ECS_TASK_DEFINITION_NAMES" ]; then
+  error "Please set the 'task-definition-names' variable"
   exit 1
 fi
 
-if [ -z "$WERCKER_AWS_ECS_TASK_DEFINITION_FILE" -a -z "$WERCKER_AWS_ECS_TASK_DEFINITION_TEMPLATE" ]; then
-  error "Please set the task-definition variable"
+if [ -z "$WERCKER_AWS_ECS_TASK_DEFINITION_FILES" -a -z "$WERCKER_AWS_ECS_TASK_DEFINITION_TEMPLATES" ]; then
+  error "Please set the 'task-definition-files' or 'task-definition-templates' variable"
   exit 1
 fi
 
 
 
-if [ -z "$WERCKER_AWS_ECS_SERVICE_NAME" ]; then
+if [ -z "$WERCKER_AWS_ECS_SERVICE_NAMES" ]; then
   if [ "$WERCKER_AWS_ECS_TASK_DEFINITION_TEMPLATE_ENV" == 'false' ]; then
     NO_TASK_DEFINITION_TEMPLATE_ENV='--no-task-definition-template-env'
   fi
@@ -81,9 +81,9 @@ if [ -z "$WERCKER_AWS_ECS_SERVICE_NAME" ]; then
     --secret "$WERCKER_AWS_ECS_SECRET" \
     --region "${WERCKER_AWS_ECS_REGION:-us-east-1}" \
     --cluster-name "$WERCKER_AWS_ECS_CLUSTER_NAME" \
-    --task-definition-name "$WERCKER_AWS_ECS_TASK_DEFINITION_NAME" \
-    --task-definition-file "$WERCKER_AWS_ECS_TASK_DEFINITION_FILE" \
-    --task-definition-template "$WERCKER_AWS_ECS_TASK_DEFINITION_TEMPLATE" \
+    --task-definition-names $WERCKER_AWS_ECS_TASK_DEFINITION_NAMES \
+    --task-definition-files $WERCKER_AWS_ECS_TASK_DEFINITION_FILES \
+    --task-definition-templates $WERCKER_AWS_ECS_TASK_DEFINITION_TEMPLATES \
     $NO_TASK_DEFINITION_TEMPLATE_ENV \
     --task-definition-template-json "$WERCKER_AWS_ECS_TASK_DEFINITION_TEMPLATE_JSON"
 else
@@ -98,12 +98,12 @@ else
     --secret "$WERCKER_AWS_ECS_SECRET" \
     --region "${WERCKER_AWS_ECS_REGION:-us-east-1}" \
     --cluster-name "$WERCKER_AWS_ECS_CLUSTER_NAME" \
-    --task-definition-name "$WERCKER_AWS_ECS_TASK_DEFINITION_NAME" \
-    --task-definition-file "$WERCKER_AWS_ECS_TASK_DEFINITION_FILE" \
-    --task-definition-template "$WERCKER_AWS_ECS_TASK_DEFINITION_TEMPLATE" \
+    --task-definition-names $WERCKER_AWS_ECS_TASK_DEFINITION_NAMES \
+    --task-definition-files $WERCKER_AWS_ECS_TASK_DEFINITION_FILES \
+    --task-definition-templates $WERCKER_AWS_ECS_TASK_DEFINITION_TEMPLATES \
     $NO_TASK_DEFINITION_TEMPLATE_ENV \
     --task-definition-template-json "$WERCKER_AWS_ECS_TASK_DEFINITION_TEMPLATE_JSON" \
-    --service-name "$WERCKER_AWS_ECS_SERVICE_NAME" \
+    --service-names $WERCKER_AWS_ECS_SERVICE_NAMES \
     --service-desired-count "$WERCKER_AWS_ECS_SERVICE_DESIRED_COUNT" \
     $DOWNSCALE_TASKS \
     --minimum-running-tasks "${WERCKER_AWS_ECS_MINIMUM_RUNNING_TASKS:-1}"

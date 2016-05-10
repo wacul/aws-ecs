@@ -2,15 +2,14 @@
 from __future__ import unicode_literals
 import json
 import os
-
+import types
+import copy_reg
 import jinja2
 import jinja2.loaders
 
 from boto3 import Session
 
 class ServiceNotFoundException(Exception):
-    def __init__(self, value):
-        self.value = value
     def __str__(self):
         return repr(self.value)
 
@@ -73,11 +72,11 @@ def render_template(cwd, template_path, context):
         .render(context) \
         .encode('utf-8')
 
-
 class ECSService(object):
     def __init__(self, access_key, secret_key, region='us-east-1'):
         session = Session(aws_access_key_id=access_key, aws_secret_access_key=secret_key, region_name=region)
         self.client = session.client('ecs')
+
 
     def describe_cluster(self, cluster):
         """

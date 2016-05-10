@@ -39,7 +39,7 @@ This step check a previously created ECS service exists. The service MUST be cre
 
 The following configuration allows to setup this step :
 
-* `service-name` (optional): The name of the service to deploy
+* `service-names` (optional): The name of the service to deploy
 
 #### Step [Create New Task Definition ](http://docs.aws.amazon.com/AmazonECS/latest/APIReference/API_RegisterTaskDefinition.html)
 
@@ -47,9 +47,14 @@ This step register a new task definition for the service.
 
 The following configuration allows to setup this step :
 
-* `task-definition-name` (required): The name of the task definition
-* `task-definition-file` (required): The file containing the task definition
+* `task-definition-names` (required): The name of the task definition
+* `task-definition-files` (required): The file containing the task definition
 
+or
+
+* `task-definition-names` (required): The name of the task definition
+* `task-definition-templates` (required): The jinja2 template containing the task definition
+* `task-definition-template-json` (required): task-definition-templates variables
 
 ## In service mode:
 
@@ -69,6 +74,7 @@ You can think of desired count as also the minimum count for now and the schedul
 This step is run only if the number of tasks running is greater than the following configuration :
   
   * `minimum-running-tasks` (optional default 2): The minimum number of running tasks expected
+  * `downscale-tasks` : whether to perform downscale
 
 
 #### Step [Update ECS Service](http://docs.aws.amazon.com/AmazonECS/latest/APIReference/API_UpdateService.html)
@@ -96,23 +102,23 @@ deploy:
         key: aws_access_key_id
         secret: aws_access_secret_id
         cluster-name: staging
-        task-definition-name: hello-migrate-db
-        task-definition-file: /app/hello-migrate-db-task-definition.json
+        task-definition-names: hello-migrate-db
+        task-definition-files: /app/hello-migrate-db-task-definition.json
     - wacul/aws-ecs:
         key: aws_access_key_id
         secret: aws_access_secret_id
         cluster-name: staging
-        task-definition-name: hello-migrate-db
-        task-definition-template: /app/hello-migrate-db-task-definition.json.tmpl
+        task-definition-names: web app
+        task-definition-templates: /app/web.json.tmpl /app/app.json.tmpl
         task-definition-template-json: /conf/dev.json
     - wacul/aws-ecs:
         key: aws_access_key_id
         secret: aws_access_secret_id
         cluster-name: staging
-        service-name: hello
+        service-names: hello
         service-desired-count: 2
         downscale-tasks: false
-        task-definition-name: hello
-        task-definition-template: /app/hello-migrate-db-task-definition.json.tmpl
+        task-definition-names: hello
+        task-definition-templates: /app/hello-migrate-db-task-definition.json.tmpl
         task-definition-template-json: /conf/dev.json
 ```
