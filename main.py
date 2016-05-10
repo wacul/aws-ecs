@@ -113,6 +113,7 @@ try:
             template = args.task_definition_templates[count]
         st.task_apply_result = pool.apply_async(register_task_definition, [st.task_name, file, template, args.task_definition_template_json, args.task_definition_template_env])
         service_states.append(st)
+        count = count + 1
     pool.close()
     pool.join()
     for st in service_states:
