@@ -178,42 +178,42 @@ try:
                              % (st.service_name, st.original_running_count, st.downscale_running_count))
 
         # Step: Update ECS Service
-        if args.downscale_tasks:
-            is_update_service = False
-            pool = Pool(processes=POOL_PROCESSES)
-            for st in service_states:
-                if not st.service_exist:
-                    continue
-                if not is_update_service:
-                    h1("Step: Update ECS Service")
-                    is_update_service = True
-                st.update_apply_result = pool.apply_async(update_ecs_service, [args.cluster_name, st.service_name, st.task_definition_arn])
-            pool.close()
-            pool.join()
-            for st in service_states:
-                if not st.service_exist:
-                    continue
-                st.running_count = (st.update_apply_result.get().get('services')[0]).get('runningCount')
-                success("Updating service '%s' with task definition '%s' succeeded" % (st.service_name, st.task_definition_arn))
-
-        # Step: Upscale ECS Service
-        is_upscale_service = False
+        is_update_service = False
         pool = Pool(processes=POOL_PROCESSES)
         for st in service_states:
             if not st.service_exist:
                 continue
-            if not is_upscale_service:
-                h1("Step: Upscale ECS Service")
-                is_upscale_service = True
-            st.upscale_apply_result = pool.apply_async(upscale_ecs_service, [args.cluster_name, st.service_name, st.delta])
+            if not is_update_service:
+                h1("Step: Update ECS Service")
+                is_update_service = True
+            st.update_apply_result = pool.apply_async(update_ecs_service, [args.cluster_name, st.service_name, st.task_definition_arn])
         pool.close()
         pool.join()
         for st in service_states:
             if not st.service_exist:
                 continue
-            upscale_running_count = (st.upscale_apply_result.get().get('services')[0]).get('runningCount')
-            success("Upscaling service '%s' (from %d to %d tasks) succeeded"
-                    % (st.service_name, st.running_count, upscale_running_count))
+            st.running_count = (st.update_apply_result.get().get('services')[0]).get('runningCount')
+            success("Updating service '%s' with task definition '%s' succeeded" % (st.service_name, st.task_definition_arn))
+
+        # Step: Upscale ECS Service
+        if args.downscale_tasks:
+            is_upscale_service = False
+            pool = Pool(processes=POOL_PROCESSES)
+            for st in service_states:
+                if not st.service_exist:
+                    continue
+                if not is_upscale_service:
+                    h1("Step: Upscale ECS Service")
+                    is_upscale_service = True
+                st.upscale_apply_result = pool.apply_async(upscale_ecs_service, [args.cluster_name, st.service_name, st.delta])
+            pool.close()
+            pool.join()
+            for st in service_states:
+                if not st.service_exist:
+                    continue
+                upscale_running_count = (st.upscale_apply_result.get().get('services')[0]).get('runningCount')
+                success("Upscaling service '%s' (from %d to %d tasks) succeeded"
+                        % (st.service_name, st.running_count, upscale_running_count))
     else:
         # Step: run task
         h1("Step: Run task")
