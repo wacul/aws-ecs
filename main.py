@@ -11,26 +11,19 @@ from ecs import ServiceNotFoundException
 POOL_PROCESSES=3
 
 class ECSServiceState(object):
-    def __init__(self, service_name, task_name):
+    def __init__(self, service_name, task_name, task_definition_arn):
         self.service_name = service_name
         self.task_name = task_name
-        self.task_definition_arn = ""
+        self.task_definition_arn = task_definition_arn
         self.service_exist = False
         self.original_running_count = 0
         self.downscale_running_count = 0
         self.running_count = 0
         self.delta = 0
-        self.service_apply_result = None
-        self.task_apply_result = None
         self.downscale_apply_result = None
         self.update_apply_result = None
         self.upscale_apply_result = None
 
-def register_task_definition(task, file, template, task_definition_template_json, task_definition_template_env):
-    return ecs.register_task_definition(task, file, template, task_definition_template_json, task_definition_template_env)
-
-def check_ecs_service(cluster_name, service_name):
-    return ecs.describe_service(cluster=cluster_name, service=service_name)
 
 def downscale_ecs_service(cluster_name, service_name):
     return ecs.downscale_service(cluster=cluster_name, service=service_name)
@@ -97,39 +90,30 @@ try:
     # Step: Register New Task Definition
     h1("Step: Register New Task Definition")
     count = 0
-    pool = Pool(processes=POOL_PROCESSES)
     service_states = []
     for task_name in args.task_definition_names:
         try:
             service_name = args.service_names[count]
         except TypeError:
             service_name = None
-        st = ECSServiceState(service_name, task_name)
         file = None
         template = None
         if args.task_definition_files:
             file = args.task_definition_files[count]
         if args.task_definition_templates:
             template = args.task_definition_templates[count]
-        st.task_apply_result = pool.apply_async(register_task_definition, [st.task_name, file, template, args.task_definition_template_json, args.task_definition_template_env])
+        response = ecs.register_task_definition(family=task_name, file=file, template=template, template_json=args.task_definition_template_json, template_env=args.task_definition_template_env)
+        task_definition_arn = response.get('taskDefinition').get('taskDefinitionArn')
+        st = ECSServiceState(service_name, task_name, task_definition_arn)
         service_states.append(st)
+        success("Registering task definition '%s' succeeded (arn: '%s')" % (task_name, task_definition_arn))
         count = count + 1
-    pool.close()
-    pool.join()
-    for st in service_states:
-        st.task_definition_arn = st.task_apply_result.get().get('taskDefinition').get('taskDefinitionArn')
-        success("Registering task definition '%s' succeeded" % st.task_name)
 
     if serviceMode:
         h1("Step: Check ECS Service")
-        pool = Pool(processes=POOL_PROCESSES)
-        for st in service_states:
-            st.service_apply_result = pool.apply_async(check_ecs_service, [args.cluster_name, st.service_name])
-        pool.close()
-        pool.join()
         for st in service_states:
             try:
-                response = st.service_apply_result.get()
+                response = ecs.describe_service(args.cluster_name, st.service_name)
                 if response['services'][0]['status'] == 'INACTIVE':
                     error("Service '%s' status is INACTIVE." % (st.service_name))
                     continue
