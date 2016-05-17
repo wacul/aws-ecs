@@ -1,5 +1,5 @@
 name: aws-ecs
-version: 0.4.4
+version: 0.4.5
 description: Deploy service to ECS
 keywords:
   - aws
@@ -21,13 +21,13 @@ properties:
     type: string
     required: true
   task-definition-names:
-    type: string
+    type: array
     required: true
   task-definition-files:
-    type: string
+    type: array
     required: true
   task-definition-templates:
-    type: string
+    type: array
     required: true
   task-definition-template-json:
     type: string
@@ -39,7 +39,7 @@ properties:
 
   # Step 3: Defining service (optional)
   service-names:
-    type: string
+    type: array
     required: true
   service-desired-count:
     type: int
