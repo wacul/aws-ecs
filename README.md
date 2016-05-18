@@ -108,8 +108,12 @@ deploy:
         key: aws_access_key_id
         secret: aws_access_secret_id
         cluster-name: staging
-        task-definition-names: web app
-        task-definition-templates: /app/web.json.tmpl /app/app.json.tmpl
+        task-definition-names:|
+            web
+            app
+        task-definition-templates:|
+            /app/web.json.tmpl
+            /app/app.json.tmpl
         task-definition-template-json: /conf/dev.json
     - wacul/aws-ecs:
         key: aws_access_key_id
