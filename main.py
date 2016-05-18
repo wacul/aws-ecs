@@ -36,8 +36,9 @@ def upscale_ecs_service(cluster_name, service_name, delta):
 
 def get_separated_args(value):
     if value:
-        value = value.replace('\n', ',')
+        value = value.replace('\\n', ',')
         value = value.replace(' ', ',')
+        print value
         return value.split(',')
     return None
 
@@ -113,7 +114,6 @@ try:
             file = task_definition_files[count]
         if task_definition_templates:
             template = task_definition_templates[count]
-            print template
         response = ecs.register_task_definition(family=task_name, file=file, template=template, template_json=args.task_definition_template_json, template_env=args.task_definition_template_env)
         task_definition_arn = response.get('taskDefinition').get('taskDefinitionArn')
         st = ECSServiceState(service_name, task_name, task_definition_arn)
