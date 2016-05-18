@@ -34,10 +34,10 @@ def update_ecs_service(cluster_name, service_name, task_definition_arn):
 def upscale_ecs_service(cluster_name, service_name, delta):
     return ecs.upscale_service(cluster=cluster_name, service=service_name, delta=delta)
 
-def get_separated_args(option, opt, value, parser):
+def get_separated_args(value):
     value = value.replace('\n', ',')
     value = value.replace(' ', ',')
-    setattr(parser.values, option.dest, value.split(','))
+    return value.split(',')
 
 logging.basicConfig(stream=sys.stdout, level=logging.INFO, format='%(message)s')
 logging.getLogger("botocore").setLevel(logging.WARNING)
@@ -52,13 +52,13 @@ parser.add_argument('--key', dest='key', required=True)
 parser.add_argument('--secret', dest='secret', required=True)
 parser.add_argument('--region', dest='region', default='us-east-1')
 parser.add_argument('--cluster-name', dest='cluster_name', required=True)
-parser.add_argument('--task-definition-names', dest='task_definition_names', required=True, action='callback', callback=get_separated_args)
-parser.add_argument('--task-definition-files', dest='task_definition_files', required=True, action='callback', callback=get_separated_args))
-parser.add_argument('--task-definition-templates', dest='task_definition_templates', required=True, action='callback', callback=get_separated_args))
+parser.add_argument('--task-definition-names', dest='task_definition_names', required=True)
+parser.add_argument('--task-definition-files', dest='task_definition_files', required=True)
+parser.add_argument('--task-definition-templates', dest='task_definition_templates', required=True)
 parser.add_argument('--task-definition-template-json', dest='task_definition_template_json', required=True)
 parser.add_argument('--task-definition-template-env', dest='task_definition_template_env', default=True, action='store_true', required=False)
 parser.add_argument('--no-task-definition-template-env', dest='task_definition_template_env', default=True, action='store_false', required=False)
-parser.add_argument('--service-names', dest='service_names', required=False, action='callback', callback=get_separated_args))
+parser.add_argument('--service-names', dest='service_names', required=False)
 parser.add_argument('--service-desired-count', type=int, dest='service_desired_count', required=False)
 parser.add_argument('--service-maximum-percent', type=int, dest='service_maximum_percent', default=200, required=False)
 parser.add_argument('--service-minimum-healthy-percent', type=int, dest='service_minimum_healthy_percent', default=50, required=False)
@@ -66,6 +66,10 @@ parser.add_argument('--downscale-tasks', dest='downscale_tasks', default=False, 
 parser.add_argument('--no-downscale-tasks', dest='downscale_tasks', default=False, action='store_false', required=False)
 parser.add_argument('--minimum-running-tasks', type=int, dest='minimum_running_tasks', default=1, required=False)
 args = parser.parse_args()
+task_definition_names = get_separated_args(args.task_definition_names)
+task_definition_files = get_separated_args(args.task_definition_files)
+task_definition_templates = get_separated_args(args.task_definition_templates)
+service_names = get_separated_args(args.service_names)
 
 
 try:
@@ -73,17 +77,17 @@ try:
     h1("Step: Configuring AWS")
     ecs = ECSService(access_key=args.key, secret_key=args.secret, region=args.region)
     success("Configuring AWS succeeded")
-    if args.task_definition_files:
-        if len(args.task_definition_files) != len(args.task_definition_names):
+    if task_definition_files:
+        if len(task_definition_files) != len(task_definition_names):
             raise Exception("task-definition-names and task-definition-files need same argment number")
-    elif args.task_definition_templates:
-        if len(args.task_definition_templates) != len(args.task_definition_names):
+    elif task_definition_templates:
+        if len(task_definition_templates) != len(task_definition_names):
             raise Exception("task-definition-names and task-definition-templates need same argment number")
-    if args.service_names:
-        if len(args.service_names) != len(args.task_definition_names):
+    if service_names:
+        if len(service_names) != len(task_definition_names):
             raise Exception("task-definition-names and service_names need same argment number")
 
-    serviceMode = args.service_names is not None
+    serviceMode = service_names is not None
 
     # Step: Configuring AWS
 
@@ -98,15 +102,15 @@ try:
     service_states = []
     for task_name in args.task_definition_names:
         try:
-            service_name = args.service_names[count]
+            service_name = service_names[count]
         except TypeError:
             service_name = None
         file = None
         template = None
-        if args.task_definition_files:
-            file = args.task_definition_files[count]
-        if args.task_definition_templates:
-            template = args.task_definition_templates[count]
+        if task_definition_files:
+            file = task_definition_files[count]
+        if task_definition_templates:
+            template = task_definition_templates[count]
         response = ecs.register_task_definition(family=task_name, file=file, template=template, template_json=args.task_definition_template_json, template_env=args.task_definition_template_env)
         task_definition_arn = response.get('taskDefinition').get('taskDefinitionArn')
         st = ECSServiceState(service_name, task_name, task_definition_arn)
