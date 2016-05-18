@@ -36,7 +36,7 @@ def upscale_ecs_service(cluster_name, service_name, delta):
 
 def get_separated_args(value):
     if value:
-        value = value.replace('\\n', ',')
+        value = value.rstrip('\\n').replace('\\n', ',')
         value = value.replace(' ', ',')
         print value
         return value.split(',')
