@@ -35,9 +35,11 @@ def upscale_ecs_service(cluster_name, service_name, delta):
     return ecs.upscale_service(cluster=cluster_name, service=service_name, delta=delta)
 
 def get_separated_args(value):
-    value = value.replace('\n', ',')
-    value = value.replace(' ', ',')
-    return value.split(',')
+    if value:
+        value = value.replace('\n', ',')
+        value = value.replace(' ', ',')
+        return value.split(',')
+    return None
 
 logging.basicConfig(stream=sys.stdout, level=logging.INFO, format='%(message)s')
 logging.getLogger("botocore").setLevel(logging.WARNING)
@@ -100,7 +102,7 @@ try:
     h1("Step: Register New Task Definition")
     count = 0
     service_states = []
-    for task_name in args.task_definition_names:
+    for task_name in task_definition_names:
         try:
             service_name = service_names[count]
         except TypeError:
@@ -111,6 +113,7 @@ try:
             file = task_definition_files[count]
         if task_definition_templates:
             template = task_definition_templates[count]
+            print template
         response = ecs.register_task_definition(family=task_name, file=file, template=template, template_json=args.task_definition_template_json, template_env=args.task_definition_template_env)
         task_definition_arn = response.get('taskDefinition').get('taskDefinitionArn')
         st = ECSServiceState(service_name, task_name, task_definition_arn)
@@ -210,7 +213,7 @@ try:
     else:
         # Step: run task
         h1("Step: Run task")
-        for task_name in args.task_definition_names:
+        for task_name in task_definition_names:
             response = ecs.run_task(cluster=args.cluster_name, family=task_name)
             success("Task %s succeeded" % (response.get('tasks')[0].get('taskArn')))
 
