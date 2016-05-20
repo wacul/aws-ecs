@@ -188,7 +188,8 @@ try:
         for st in service_states:
             if not st.service_exist:
                 continue
-            st.running_count = (st.update_apply_result.get().get('services')[0]).get('runningCount')
+            response = st.update_apply_result.get()
+            st.running_count = response.get('services')[0].get('runningCount')
             success("Updating service '%s' with task definition '%s' succeeded" % (st.service_name, st.task_definition_arn))
 
         # Step: Upscale ECS Service
