@@ -4,40 +4,14 @@ import logging
 import sys
 import argparse
 from multiprocessing import Process, Manager, Pool
-from functools import partial
 
 from ecs import ECSService
 from ecs import ServiceNotFoundException
 
 POOL_PROCESSES=3
 
-class ECSPool(object):
-    def __init__(self):
-        self.pool = Pool(processes=POOL_PROCESSES)
-
-    def update_ecs_service(self, ecs_service_states):
-        is_update_service = False
-        for st in ecs_service_states:
-            if not st.service_exist:
-                continue
-            if not is_update_service:
-                h1("Step: Update ECS Service")
-                is_update_service = True
-            st.update_apply_result = self.pool.apply_async(update_ecs_service, [st.ecs_service, st.cluster_name, st.service_name, st.task_definition_arn])
-
-        for st in service_states:
-            if not st.service_exist:
-                continue
-            st.update_apply_result.wait()
-            response = st.update_apply_result.get()
-            st.running_count = response.get('services')[0].get('runningCount')
-            success("Updating service '%s' with task definition '%s' succeeded" % (st.service_name, st.task_definition_arn))
-
-
 class ECSServiceState(object):
-    def __init__(self, cluster_name, service_name, task_name, task_definition_arn):
-        self.ecs_service = ECSService(access_key=args.key, secret_key=args.secret, region=args.region)
-        self.cluster_name = cluster_name
+    def __init__(self, service_name, task_name, task_definition_arn):
         self.service_name = service_name
         self.task_name = task_name
         self.task_definition_arn = task_definition_arn
@@ -50,18 +24,18 @@ class ECSServiceState(object):
         self.update_apply_result = None
         self.upscale_apply_result = None
 
-def update_ecs_service(ecs_service, cluster_name, service_name, task_definition_arn):
-    return ecs.update_service(cluster=cluster_name, service=service_name, task_definition_arn=task_definition_arn).get('services')[0].get('runningCount')
-
-def unwrap_self_f(arg, **kwarg):
-    return ECSService.update_service(*arg, **kwarg)
 
 def downscale_ecs_service(cluster_name, service_name):
-    return ecs.downscale_service(cluster=cluster_name, service=service_name)
+    ecs_service = ECSService(access_key=args.key, secret_key=args.secret, region=args.region)
+    return ecs_service.downscale_service(cluster=cluster_name, service=service_name)
 
+def update_ecs_service(cluster_name, service_name, task_definition_arn):
+    ecs_service = ECSService(access_key=args.key, secret_key=args.secret, region=args.region)
+    return ecs_service.update_service(cluster=cluster_name, service=service_name, taskDefinition=task_definition_arn)
 
 def upscale_ecs_service(cluster_name, service_name, delta):
-    return ecs.upscale_service(cluster=cluster_name, service=service_name, delta=delta)
+    ecs_service = ECSService(access_key=args.key, secret_key=args.secret, region=args.region)
+    return ecs_service.upscale_service(cluster=cluster_name, service=service_name, delta=delta)
 
 def get_separated_args(value):
     if value:
@@ -106,10 +80,8 @@ service_names = get_separated_args(args.service_names)
 
 try:
 
-    ecs = ECSService(access_key=args.key, secret_key=args.secret, region=args.region)
-    ecs_pool = ECSPool()
-
     h1("Step: Configuring AWS")
+    ecs = ECSService(access_key=args.key, secret_key=args.secret, region=args.region)
     success("Configuring AWS succeeded")
     if task_definition_files:
         if len(task_definition_files) != len(task_definition_names):
@@ -147,7 +119,7 @@ try:
             template = task_definition_templates[count]
         response = ecs.register_task_definition(family=task_name, file=file, template=template, template_json=args.task_definition_template_json, template_env=args.task_definition_template_env)
         task_definition_arn = response.get('taskDefinition').get('taskDefinitionArn')
-        st = ECSServiceState(args.cluster_name, service_name, task_name, task_definition_arn)
+        st = ECSServiceState(service_name, task_name, task_definition_arn)
         service_states.append(st)
         success("Registering task definition '%s' succeeded (arn: '%s')" % (task_name, task_definition_arn))
         count = count + 1
@@ -183,6 +155,7 @@ try:
         # Step: Downscale ECS Service if necessary
         if args.downscale_tasks:
             is_downscale_service = False
+            pool = Pool(processes=POOL_PROCESSES)
             for st in service_states:
                 if not st.service_exist:
                     continue
@@ -204,7 +177,23 @@ try:
                              % (st.service_name, st.original_running_count, st.downscale_running_count))
 
         # Step: Update ECS Service
-        ecs_pool.update_ecs_service(service_states)
+        is_update_service = False
+        pool = Pool(processes=POOL_PROCESSES)
+        for st in service_states:
+            if not st.service_exist:
+                continue
+            if not is_update_service:
+                h1("Step: Update ECS Service")
+                is_update_service = True
+            st.update_apply_result = pool.apply_async(update_ecs_service, [args.cluster_name, st.service_name, st.task_definition_arn])
+        pool.close()
+        pool.join()
+        for st in service_states:
+            if not st.service_exist:
+                continue
+            response = st.update_apply_result.get()
+            st.running_count = response.get('services')[0].get('runningCount')
+            success("Updating service '%s' with task definition '%s' succeeded" % (st.service_name, st.task_definition_arn))
 
         # Step: Upscale ECS Service
         if args.downscale_tasks:
