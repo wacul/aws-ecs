@@ -106,7 +106,9 @@ else
     --service-names "$WERCKER_AWS_ECS_SERVICE_NAMES" \
     --service-desired-count "$WERCKER_AWS_ECS_SERVICE_DESIRED_COUNT" \
     $DOWNSCALE_TASKS \
-    --minimum-running-tasks "${WERCKER_AWS_ECS_MINIMUM_RUNNING_TASKS:-1}"
+    --minimum-running-tasks "${WERCKER_AWS_ECS_MINIMUM_RUNNING_TASKS:-1}" \
+    --service-maximum-percent "${WERCKER_AWS_ECS_SERVICE_MAXIMUM_PERCENT:-200}" \
+    --service-minimum-healthy-percent "${WERCKER_AWS_ECS_SERVICE_MINIMUM_HEALTHY_PERCENT:-50}"
 fi
 
 

@@ -1,5 +1,5 @@
 name: aws-ecs
-version: 0.4.15
+version: 0.4.16
 description: Deploy service to ECS
 keywords:
   - aws
@@ -49,5 +49,11 @@ properties:
     default: false
     required: false
   minimum-running-tasks:
+    type: int
+    required: false
+  service-maximum-percent:
+    type: int
+    required: false
+  service-minimum-healthy-percent:
     type: int
     required: false
