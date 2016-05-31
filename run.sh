@@ -90,7 +90,7 @@ else
   if [ "$WERCKER_AWS_ECS_TASK_DEFINITION_TEMPLATE_ENV" == 'false' ]; then
     TASK_DEFINITION_TEMPLATE_ENV='--no-task-definition-template-env'
   fi
-  if [ "$WERCKER_DOWNSCALE_TASKS" == 'true' ]; then
+  if [ "$WERCKER_AWS_ECS_DOWNSCALE_TASKS" == 'true' ]; then
     DOWNSCALE_TASKS='--downscale-tasks'
   fi
   python "$WERCKER_STEP_ROOT/main.py" \
