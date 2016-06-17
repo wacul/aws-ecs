@@ -8,7 +8,7 @@ from multiprocessing import Process, Manager, Pool
 from ecs import ECSService
 from ecs import ServiceNotFoundException
 
-POOL_PROCESSES=3
+POOL_PROCESSES=10
 
 class ECSServiceState(object):
     def __init__(self, service_name, task_name, task_definition_arn):
