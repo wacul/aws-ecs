@@ -93,6 +93,9 @@ else
   if [ "$WERCKER_AWS_ECS_DOWNSCALE_TASKS" == 'true' ]; then
     DOWNSCALE_TASKS='--downscale-tasks'
   fi
+  if [ "$WERCKER_AWS_ECS_SERVICE_ZERO_PRESERVE" == 'false' ]; then
+    SERVICE_ZERO_PRESERVE='--no-service-zero-preserve'
+  fi
   python3 "$WERCKER_STEP_ROOT/main.py" \
     --key "$WERCKER_AWS_ECS_KEY" \
     --secret "$WERCKER_AWS_ECS_SECRET" \

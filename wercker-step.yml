@@ -1,5 +1,5 @@
 name: aws-ecs
-version: 0.5.0
+version: 0.5.1
 description: Deploy service to ECS
 keywords:
   - aws
@@ -56,4 +56,8 @@ properties:
     required: false
   service-minimum-healthy-percent:
     type: int
+    required: false
+  service-zero-keep:
+    type: bool
+    default: true
     required: false

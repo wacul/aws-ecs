@@ -62,6 +62,7 @@ class AwsProcess(Thread):
                 error("Service '%s' status is INACTIVE." % (service.service_name))
                 return
             service.original_running_count = (response.get('services')[0]).get('runningCount')
+            service.desired_count = (response.get('services')[0]).get('desiredCount')
             service.service_exists = True
             success("Checking service '%s' succeeded (%d tasks running)" % (service.service_name, service.original_running_count))
 
@@ -103,6 +104,7 @@ class Service(object):
         self.task_definition_arn = None
         self.service_exists = False
         self.original_running_count = 0
+        self.desired_count = 0
         self.downscale_running_count = 0
         self.running_count = 0
         self.delta = 0
@@ -121,6 +123,7 @@ logger = logging.getLogger(__name__)
 h1 = lambda x: logger.info("\033[1m\033[4m\033[94m%s\033[0m\n" % x)
 success = lambda x: logger.info("\033[92m✔ %s\033[0m\n" % x)
 error = lambda x: logger.info("\033[91m✖ %s\033[0m\n" % x)
+info = lambda x: logger.info("  %s\n" % x)
 
 # Arguments parsing
 parser = argparse.ArgumentParser(description='Deploy Service on ECS')
@@ -142,6 +145,8 @@ parser.add_argument('--downscale-tasks', dest='downscale_tasks', default=False, 
 parser.add_argument('--no-downscale-tasks', dest='downscale_tasks', default=False, action='store_false', required=False)
 parser.add_argument('--minimum-running-tasks', type=int, default=1, required=False)
 parser.add_argument('--threads-count', type=int, default=10, required=False)
+parser.add_argument('--service-zero-keep', dest='service_zero_keep', default=True, action='store_true', required=False)
+parser.add_argument('--no-service-zero-keep', dest='service_zero_keep', default=True, action='store_false', required=False)
 args = parser.parse_args()
 task_definition_names = get_separated_args(args.task_definition_names)
 task_definition_files = get_separated_args(args.task_definition_files)
@@ -214,6 +219,10 @@ class ServiceManager(object):
                 if not is_downscale_service:
                     h1("Step: Downscale ECS Service")
                     is_downscale_service = True
+                if args.service_zero_keep and service.desired_count == 0:
+                    # サービスのタスク数が0だったらそれを維持する
+                    info("Service '%s' is zero task service. skipping." % service.service_name)
+                    continue
                 if service.original_running_count >= args.minimum_running_tasks:
                     task_queue.put([service, ProcessMode.downscaleService])
                     service.delta = 1
@@ -230,6 +239,10 @@ class ServiceManager(object):
             if not is_update_service:
                 h1("Step: Update ECS Service")
                 is_update_service = True
+            if args.service_zero_keep and service.desired_count == 0:
+                # サービスのタスク数が0だったらそれを維持する
+                info("Service '%s' is zero task service. skipping." % service.service_name)
+                continue
             task_queue.put([service, ProcessMode.updateService])
         task_queue.join()
 
@@ -242,6 +255,10 @@ class ServiceManager(object):
                 if not is_upscale_service:
                     h1("Step: Upscale ECS Service")
                     is_upscale_service = True
+                if args.service_zero_keep and service.desired_count == 0:
+                    # サービスのタスク数が0だったらそれを維持する
+                    info("Service '%s' is zero task service. skipping." % service.service_name)
+                    continue
                 task_queue.put([service, ProcessMode.upscaleService])
         task_queue.join()
 
@@ -251,7 +268,7 @@ class ServiceManager(object):
             response = ecs.run_task(cluster=service.cluster_name, family=service.task_name)
             success("Task %s (%s) succeeded" % (service.task_name, response.get('tasks')[0].get('taskArn')))
 
-     def result_check():
+    def result_check(self):
         error_service_list = list(filter(lambda service:service.status == ProcessStatus.error, self.service_list))
         if len(error_service_list) > 0:
             sys.exit(1)
