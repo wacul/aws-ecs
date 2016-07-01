@@ -25,9 +25,9 @@ if ! type_exists 'python3'; then
 fi
 
 # Check pip is installed
-if ! type_exists 'pip'; then
+if ! type_exists 'pip3'; then
   if type_exists 'curl'; then
-    curl --silent --show-error --retry 5 https://bootstrap.pypa.io/get-pip.py | sudo python
+    curl --silent --show-error --retry 5 https://bootstrap.pypa.io/get-pip.py | sudo python3
   elif type_exists 'wget' && type_exists 'openssl'; then
     wget -q -O - https://bootstrap.pypa.io/get-pip.py | sudo python3
   else
@@ -37,7 +37,7 @@ if ! type_exists 'pip'; then
 fi
 
 # Install python dependencies
-INSTALL_DEPENDENCIES=$(pip install -r $WERCKER_STEP_ROOT/requirements.txt 2>&1)
+INSTALL_DEPENDENCIES=$(pip3 install -r $WERCKER_STEP_ROOT/requirements.txt 2>&1)
 if [ $? -ne 0 ]; then
   error "Unable to install dependencies"
   warn "$INSTALL_DEPENDENCIES"
