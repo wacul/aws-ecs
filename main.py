@@ -73,7 +73,7 @@ class AwsProcess(Thread):
 
         elif mode == ProcessMode.downscaleService:
             response = self.ecs_service.downscale_service(cluster=service.cluster_name, service=service.service_name)
-            service.downscale_running_count = (response.get().get('services')[0]).get('runningCount')
+            service.downscale_running_count = (response.get('services')[0]).get('runningCount')
             success("Downscaling service '%s' (from %d to %d tasks) succeeded"
                  % (service.service_name, service.original_running_count, service.downscale_running_count))
 
@@ -84,7 +84,7 @@ class AwsProcess(Thread):
 
         elif mode == ProcessMode.upscaleService:
             response = self.ecs_service.upscale_service(cluster=service.cluster_name, service=service.service_name, delta=service.delta)
-            upscale_running_count = (response.get().get('services')[0]).get('runningCount')
+            upscale_running_count = (response.get('services')[0]).get('runningCount')
             success("Upscaling service '%s' (from %d to %d tasks) succeeded"
                         % (service.service_name, service.running_count, upscale_running_count))
 
@@ -249,7 +249,7 @@ class ServiceManager(object):
     def upscale_service(self):
         if args.downscale_tasks:
             is_upscale_service = False
-            for service in service_list:
+            for service in self.service_list:
                 if not service.service_exists:
                     continue
                 if not is_upscale_service:
