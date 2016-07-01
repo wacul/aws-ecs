@@ -213,7 +213,7 @@ class ServiceManager(object):
     def downscale_service(self):
         if args.downscale_tasks:
             is_downscale_service = False
-            for service in self.service_lists:
+            for service in self.service_list:
                 if not service.service_exists:
                     continue
                 if not is_downscale_service:
