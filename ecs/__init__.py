@@ -3,7 +3,6 @@ from __future__ import unicode_literals
 import json
 import os
 import types
-import copy_reg
 import jinja2
 import jinja2.loaders
 
@@ -16,9 +15,8 @@ class ServiceNotFoundException(Exception):
 class FilePathLoader(jinja2.BaseLoader):
     """ Custom Jinja2 template loader which just loads a single template file """
 
-    def __init__(self, cwd, encoding='utf-8'):
+    def __init__(self, cwd):
         self.cwd = cwd
-        self.encoding = encoding
 
     def get_source(self, environment, template):
         # Path
@@ -27,7 +25,7 @@ class FilePathLoader(jinja2.BaseLoader):
         # Read
         try:
             with open(template, 'r') as f:
-                contents = f.read().decode(self.encoding)
+                contents = f.read()
         except IOError:
             raise jinja2.TemplateNotFound(template)
 
@@ -37,7 +35,7 @@ class FilePathLoader(jinja2.BaseLoader):
 
 def parse_env(data_string):
     # Parse
-    if isinstance(data_string, basestring):
+    if isinstance(data_string, str):
         data = filter(
             lambda l: len(l) == 2 ,
             (
@@ -69,8 +67,7 @@ def render_template(cwd, template_path, context):
 
     return env \
         .get_template(template_path) \
-        .render(context) \
-        .encode('utf-8')
+        .render(context)
 
 class ECSService(object):
     def __init__(self, access_key, secret_key, region='us-east-1'):

@@ -19,17 +19,17 @@ type_exists() {
 }
 
 # Check python is installed
-if ! type_exists 'python2.7'; then
-  error "Please install python 2.7"
-  exit 1
+if ! type_exists 'python3'; then
+  error "Please install python3"
+  exit 
 fi
 
 # Check pip is installed
 if ! type_exists 'pip'; then
   if type_exists 'curl'; then
-    curl --silent --show-error --retry 5 https://bootstrap.pypa.io/get-pip.py | sudo python2.7
+    curl --silent --show-error --retry 5 https://bootstrap.pypa.io/get-pip.py | sudo python
   elif type_exists 'wget' && type_exists 'openssl'; then
-    wget -q -O - https://bootstrap.pypa.io/get-pip.py | sudo python2.7
+    wget -q -O - https://bootstrap.pypa.io/get-pip.py | sudo python3
   else
     error "Please install pip, curl, or wget with openssl"
     exit 1
@@ -76,7 +76,7 @@ if [ -z "$WERCKER_AWS_ECS_SERVICE_NAMES" ]; then
   if [ "$WERCKER_AWS_ECS_TASK_DEFINITION_TEMPLATE_ENV" == 'false' ]; then
     NO_TASK_DEFINITION_TEMPLATE_ENV='--no-task-definition-template-env'
   fi
-  python "$WERCKER_STEP_ROOT/main.py" \
+  python3 "$WERCKER_STEP_ROOT/main.py" \
     --key "$WERCKER_AWS_ECS_KEY" \
     --secret "$WERCKER_AWS_ECS_SECRET" \
     --region "${WERCKER_AWS_ECS_REGION:-us-east-1}" \
@@ -93,7 +93,7 @@ else
   if [ "$WERCKER_AWS_ECS_DOWNSCALE_TASKS" == 'true' ]; then
     DOWNSCALE_TASKS='--downscale-tasks'
   fi
-  python "$WERCKER_STEP_ROOT/main.py" \
+  python3 "$WERCKER_STEP_ROOT/main.py" \
     --key "$WERCKER_AWS_ECS_KEY" \
     --secret "$WERCKER_AWS_ECS_SECRET" \
     --region "${WERCKER_AWS_ECS_REGION:-us-east-1}" \
