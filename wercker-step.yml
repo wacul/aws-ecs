@@ -1,5 +1,5 @@
 name: aws-ecs
-version: 0.5.5
+version: 0.6.0
 description: Deploy service to ECS
 keywords:
   - aws
@@ -17,47 +17,33 @@ properties:
     required: false
 
   # Step 2: Defining task definition
-  cluster-name:
+  task-definition-template-dir:
     type: string
     required: true
-  task-definition-names:
+  template-group:
     type: string
     required: true
-  task-definition-files:
+  task-definition-json:
     type: string
     required: true
-  task-definition-templates:
-    type: string
-    required: true
-  task-definition-template-json:
-    type: string
-    required: true
-  task-definition-template-env:
+  task-definition-env:
     type: bool
     default: true
     required: false
 
-  # Step 3: Defining service (optional)
-  service-names:
-    type: string
-    required: true
-  service-desired-count:
-    type: int
-    required: true 
-  downscale-tasks:
-    type: bool
-    default: false
-    required: false
-  minimum-running-tasks:
-    type: int
-    required: false
-  service-maximum-percent:
-    type: int
-    required: false
-  service-minimum-healthy-percent:
-    type: int
-    required: false
+  # Step 3: optional
   service-zero-keep:
     type: bool
     default: true
+    required: false
+  delete-unused-service:
+    type: bool
+    default: true
+    required: false
+  deploy-service-group:
+    type: string
+    required: false
+  threads-count:
+    type: int
+    default: 10
     required: false

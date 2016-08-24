@@ -55,64 +55,47 @@ if [ -z "$WERCKER_AWS_ECS_SECRET" ]; then
   exit 1
 fi
 
-if [ -z "$WERCKER_AWS_ECS_CLUSTER_NAME" ]; then
-  error "Please set the 'cluster-name' variable"
+if [ -z "$WERCKER_AWS_ECS_TASK_DEFINITION_TEMPLATE_DIR" ]; then
+  error "Please set the 'task-definition-template-dir' variable"
   exit 1
 fi
 
-if [ -z "$WERCKER_AWS_ECS_TASK_DEFINITION_NAMES" ]; then
-  error "Please set the 'task-definition-names' variable"
+if [ -z "$WERCKER_AWS_ECS_TEMPLATE_GROUP" ]; then
+  error "Please set the 'template-group' variable"
   exit 1
 fi
 
-if [ -z "$WERCKER_AWS_ECS_TASK_DEFINITION_FILES" -a -z "$WERCKER_AWS_ECS_TASK_DEFINITION_TEMPLATES" ]; then
-  error "Please set the 'task-definition-files' or 'task-definition-templates' variable"
+if [ -z "$WERCKER_AWS_ECS_TASK_DEFINITION_CONFIG_JSON" ]; then
+  error "Please set the 'task-definition-config-json' variable"
   exit 1
 fi
 
+if [ "$WERCKER_AWS_ECS_TASK_DEFINITION_CONFIG_ENV" == 'false' ]; then
+  TASK_DEFINITION_CONFIG_ENV='--no-task-definition-config-env'
+fi
+if [ "$WERCKER_AWS_ECS_SERVICE_ZERO_KEEP" == 'false' ]; then
+  SERVICE_ZERO_KEEP='--no-service-zero-keep'
+fi
+if [ ! -z "$WERCKER_AWS_ECS_DEPLOY_SERVICE_GROUP" ]; then
+  DEPLOY_SERVICE_GROUP="--deploy-service-group $WERCKER_AWS_ECS_DEPLOY_SERVICE_GROUP"
+fi
+if [ "$WERCKER_AWS_ECS_DELETE_UNUSED_SERVICE" == 'false' ]; then
+  NO_DELETE_UNUSED_SERVICE='--no-delete-unused-service'
+fi
+if [ ! -z "$WERCKER_AWS_ECS_THREADS_COUNT" ]; then
+  THREADS_COUNT="--threads-count $WERCKER_AWS_ECS_THREADS_COUNT"
+fi
 
 
-if [ -z "$WERCKER_AWS_ECS_SERVICE_NAMES" ]; then
-  if [ "$WERCKER_AWS_ECS_TASK_DEFINITION_TEMPLATE_ENV" == 'false' ]; then
-    NO_TASK_DEFINITION_TEMPLATE_ENV='--no-task-definition-template-env'
-  fi
-  python3 "$WERCKER_STEP_ROOT/main.py" \
+python3 "$WERCKER_STEP_ROOT/main.py" \
     --key "$WERCKER_AWS_ECS_KEY" \
     --secret "$WERCKER_AWS_ECS_SECRET" \
     --region "${WERCKER_AWS_ECS_REGION:-us-east-1}" \
-    --cluster-name "$WERCKER_AWS_ECS_CLUSTER_NAME" \
-    --task-definition-names "$WERCKER_AWS_ECS_TASK_DEFINITION_NAMES" \
-    --task-definition-files "$WERCKER_AWS_ECS_TASK_DEFINITION_FILES" \
-    --task-definition-templates "$WERCKER_AWS_ECS_TASK_DEFINITION_TEMPLATES" \
-    $NO_TASK_DEFINITION_TEMPLATE_ENV \
-    --task-definition-template-json "$WERCKER_AWS_ECS_TASK_DEFINITION_TEMPLATE_JSON"
-else
-  if [ "$WERCKER_AWS_ECS_TASK_DEFINITION_TEMPLATE_ENV" == 'false' ]; then
-    TASK_DEFINITION_TEMPLATE_ENV='--no-task-definition-template-env'
-  fi
-  if [ "$WERCKER_AWS_ECS_DOWNSCALE_TASKS" == 'true' ]; then
-    DOWNSCALE_TASKS='--downscale-tasks'
-  fi
-  if [ "$WERCKER_AWS_ECS_SERVICE_ZERO_PRESERVE" == 'false' ]; then
-    SERVICE_ZERO_PRESERVE='--no-service-zero-preserve'
-  fi
-  python3 "$WERCKER_STEP_ROOT/main.py" \
-    --key "$WERCKER_AWS_ECS_KEY" \
-    --secret "$WERCKER_AWS_ECS_SECRET" \
-    --region "${WERCKER_AWS_ECS_REGION:-us-east-1}" \
-    --cluster-name "$WERCKER_AWS_ECS_CLUSTER_NAME" \
-    --task-definition-names "$WERCKER_AWS_ECS_TASK_DEFINITION_NAMES" \
-    --task-definition-files "$WERCKER_AWS_ECS_TASK_DEFINITION_FILES" \
-    --task-definition-templates "$WERCKER_AWS_ECS_TASK_DEFINITION_TEMPLATES" \
-    $NO_TASK_DEFINITION_TEMPLATE_ENV \
-    --task-definition-template-json "$WERCKER_AWS_ECS_TASK_DEFINITION_TEMPLATE_JSON" \
-    --service-names "$WERCKER_AWS_ECS_SERVICE_NAMES" \
-    --service-desired-count "$WERCKER_AWS_ECS_SERVICE_DESIRED_COUNT" \
-    $DOWNSCALE_TASKS \
-    --minimum-running-tasks "${WERCKER_AWS_ECS_MINIMUM_RUNNING_TASKS:-1}" \
-    --service-maximum-percent "${WERCKER_AWS_ECS_SERVICE_MAXIMUM_PERCENT:-200}" \
-    --service-minimum-healthy-percent "${WERCKER_AWS_ECS_SERVICE_MINIMUM_HEALTHY_PERCENT:-50}"
-fi
-
-
-
+    --task-definition-template-dir "$WERCKER_AWS_ECS_TASK_DEFINITION_TEMPLATE_DIR" \
+    --template-group "$WERCKER_AWS_ECS_TEMPLATE_GROUP" \
+    $NO_TASK_DEFINITION_CONFIG_ENV \
+    $NO_DELETE_UNUSED_SERVICE \
+    $SERVICE_ZERO_KEEP \
+    $DEPLOY_SERVICE_GROUP \
+    $THREADS_COUNT \
+    --task-definition-config-json "$WERCKER_AWS_ECS_TASK_DEFINITION_CONFIG_JSON"
