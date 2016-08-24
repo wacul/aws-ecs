@@ -95,17 +95,20 @@ class AwsProcess(Thread):
         elif mode == ProcessMode.downscaleService:
             response = self.ecs_service.downscale_service(cluster=service.task_environment.cluster_name, service=service.service_name, maximumPercent=service.task_environment.maximum_percent, minimumHealthyPercent=service.task_environment.minimum_healthy_percent)
             service.downscale_running_count = (response.get('services')[0]).get('runningCount')
+            service.desired_count = response.get('services')[0].get('desiredCount')
             success("Downscaling service '%s' (from %d to %d tasks) succeeded"
                  % (service.service_name, service.original_running_count, service.downscale_running_count))
 
         elif mode == ProcessMode.updateService:
             response = self.ecs_service.update_service(cluster=service.task_environment.cluster_name, service=service.service_name, taskDefinition=service.task_definition_arn, maximumPercent=service.task_environment.maximum_percent, minimumHealthyPercent=service.task_environment.minimum_healthy_percent)
             service.running_count = response.get('services')[0].get('runningCount')
+            service.desired_count = response.get('services')[0].get('desiredCount')
             success("Updating service '%s' with task definition '%s' succeeded" % (service.service_name, service.task_definition_arn))
 
         elif mode == ProcessMode.upscaleService:
             response = self.ecs_service.upscale_service(cluster=service.task_environment.cluster_name, service=service.service_name, delta=service.delta, maximumPercent=service.task_environment.maximum_percent, minimumHealthyPercent=service.task_environment.minimum_healthy_percent)
             upscale_running_count = (response.get('services')[0]).get('runningCount')
+            service.desired_count = response.get('services')[0].get('desiredCount')
             success("Upscaling service '%s' (from %d to %d tasks) succeeded"
                         % (service.service_name, service.running_count, upscale_running_count))
 
