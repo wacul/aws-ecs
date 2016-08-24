@@ -162,7 +162,7 @@ class ECSService(object):
         return self.update_service(cluster=cluster, service=service, taskDefinition=task_definition,
                                    desiredCount=desired_count)
 
-    def update_service(self, cluster, service, taskDefinition, desiredCount=None):
+    def update_service(self, cluster, service, taskDefinition, maximumPercent, minimumHealthyPercent, desiredCount=None):
         """
         Update the service with the task definition
         :param cluster: the cluster name
@@ -172,10 +172,18 @@ class ECSService(object):
         :return: the response or raise an Exception
         """
         if desiredCount is None:
-            self.client.update_service(cluster=cluster, service=service, taskDefinition=taskDefinition)
+            self.client.update_service(cluster=cluster, service=service, taskDefinition=taskDefinition,
+                deploymentConfiguration={
+                    'maximumPercent': maximumPercent,
+                    'minimumHealthyPercent': minimumHealthyPercent
+                })
         else:
             self.client.update_service(cluster=cluster, service=service, taskDefinition=taskDefinition,
-                                   desiredCount=desiredCount)
+                deploymentConfiguration={
+                    'maximumPercent': maximumPercent,
+                    'minimumHealthyPercent': minimumHealthyPercent
+                },
+                desiredCount=desiredCount)
 
         # Waiting for the service update is done
         waiter = self.client.get_waiter('services_stable')

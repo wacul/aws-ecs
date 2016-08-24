@@ -71,7 +71,7 @@ class AwsProcess(Thread):
             service.task_definition_arn = response.get('taskDefinition').get('taskDefinitionArn')
             success("Registering task definition '%s' succeeded (arn: '%s')" % (service.task_name, service.task_definition_arn))
             # for register task rate limit
-            time.sleep(1)
+            time.sleep(3)
 
         elif mode == ProcessMode.checkService:
             try:
@@ -99,7 +99,7 @@ class AwsProcess(Thread):
                  % (service.service_name, service.original_running_count, service.downscale_running_count))
 
         elif mode == ProcessMode.updateService:
-            response = self.ecs_service.update_service(cluster=service.task_environment.cluster_name, service=service.service_name, taskDefinition=service.task_definition_arn)
+            response = self.ecs_service.update_service(cluster=service.task_environment.cluster_name, service=service.service_name, taskDefinition=service.task_definition_arn, maximumPercent=service.task_environment.maximum_percent, minimumHealthyPercent=service.task_environment.minimum_healthy_percent)
             service.running_count = response.get('services')[0].get('runningCount')
             success("Updating service '%s' with task definition '%s' succeeded" % (service.service_name, service.task_definition_arn))
 
@@ -124,7 +124,7 @@ class TaskEnvironment(object):
         self.minimum_running_tasks = None
         self.is_downscale_task = None
         self.minimum_healthy_percent = 50
-        self.maximum_percent = 100
+        self.maximum_percent = 200
         for task_environment in task_environment_list:
             if task_environment['name'] == 'ENVIRONMENT':
                 self.environment = task_environment['value']
