@@ -132,7 +132,7 @@ class ECSService(object):
             raise Exception('Task definition (%s) is inactive' % arn)
         return response
 
-    def downscale_service(self, cluster, service, delta=1):
+    def downscale_service(self, cluster, service, maximumPercent, minimumHealthyPercent, delta=1):
         """
         Downscale a service
         :param cluster: the cluster name
@@ -144,10 +144,9 @@ class ECSService(object):
         running_count = (response.get('services')[0]).get('runningCount')
         task_definition = (response.get('services')[0]).get('taskDefinition')
         desired_count = running_count - delta
-        return self.update_service(cluster=cluster, service=service, taskDefinition=task_definition,
-                                   desiredCount=desired_count)
+        return self.update_service(cluster=cluster, service=service, taskDefinition=task_definition, desiredCount=desired_count, maximumPercent=maximumPercent, minimumHealthyPercent=minimumHealthyPercent)
 
-    def upscale_service(self, cluster, service, delta=1):
+    def upscale_service(self, cluster, service, maximumPercent, minimumHealthyPercent, delta=1):
         """
         Upscale a service
         :param cluster: the cluster name
@@ -159,8 +158,7 @@ class ECSService(object):
         running_count = (response.get('services')[0]).get('runningCount')
         task_definition = (response.get('services')[0]).get('taskDefinition')
         desired_count = running_count + delta
-        return self.update_service(cluster=cluster, service=service, taskDefinition=task_definition,
-                                   desiredCount=desired_count)
+        return self.update_service(cluster=cluster, service=service, taskDefinition=task_definition, desiredCount=desired_count, maximumPercent=maximumPercent, minimumHealthyPercent=minimumHealthyPercent)
 
     def update_service(self, cluster, service, taskDefinition, maximumPercent, minimumHealthyPercent, desiredCount=None):
         """
