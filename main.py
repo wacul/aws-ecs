@@ -70,6 +70,8 @@ class AwsProcess(Thread):
             response = self.ecs_service.register_task_definition(task_definition=service.task_definition)
             service.task_definition_arn = response.get('taskDefinition').get('taskDefinitionArn')
             success("Registering task definition '%s' succeeded (arn: '%s')" % (service.task_name, service.task_definition_arn))
+            # for register task rate limit
+            time.sleep(1)
 
         elif mode == ProcessMode.checkService:
             try:
@@ -121,8 +123,8 @@ class TaskEnvironment(object):
         self.desired_count = None
         self.minimum_running_tasks = None
         self.is_downscale_task = None
-        self.minimum_healthy_percent = None
-        self.maximum_percent = None
+        self.minimum_healthy_percent = 50
+        self.maximum_percent = 100
         for task_environment in task_environment_list:
             if task_environment['name'] == 'ENVIRONMENT':
                 self.environment = task_environment['value']
@@ -155,6 +157,8 @@ class Service(object):
         except EnvironmentValueNotFoundException:
             error("service '%s' is lack of environment" % (service_name))
             sys.exit(1)
+        except:
+            raise
 
         self.status = ProcessStatus.normal
 
@@ -196,10 +200,10 @@ class ServiceManager(object):
         for file in files:
             try:
                 task_definitions = render.render_definition(args.task_definition_template_dir, file, task_definition_config_json, args.task_definition_config_env)
+                self.service_list.extend(self.import_service_from_task_definitions(task_definitions))
             except:
                 error("Template error. file: %s.\n%s" % (file, traceback.format_exc()))
                 sys.exit(1)
-            self.service_list.extend(self.import_service_from_task_definitions(task_definitions))
         if args.deploy_service_group:
             self.deploy_service_list = list(filter(lambda service:service.task_environment.service_group == args.deploy_service_group, self.service_list))
         else:
@@ -341,7 +345,7 @@ class ServiceManager(object):
             if self.is_service_zero_keep and service.desired_count == 0:
                 # サービスのタスク数が0だったらそれを維持する
                 info("Service '%s' is zero task service. skipping." % service.service_name)
-            elif self.desired_count == service.task_environment.desired_count:
+            elif service.desired_count == service.task_environment.desired_count:
                 info("Service '%s' desired count matched. skipping." % service.service_name)
             else:
                 task_queue.put([service, ProcessMode.upscaleService])
