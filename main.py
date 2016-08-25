@@ -83,19 +83,22 @@ class AwsProcess(Thread):
                 error("Service '%s' status is INACTIVE." % (service.service_name))
                 return
             service.original_running_count = (response.get('services')[0]).get('runningCount')
-            service.desired_count = (response.get('services')[0]).get('desiredCount')
+            service.original_desired_count = (response.get('services')[0]).get('desiredCount')
+            service.desired_count = service.original_desired_count
             service.service_exists = True
             success("Checking service '%s' succeeded (%d tasks running)" % (service.service_name, service.original_running_count))
 
         elif mode == ProcessMode.createService:
             response = self.ecs_service.create_service(cluster=service.task_environment.cluster_name, service=service.service_name, taskDefinition=service.task_definition_arn, desiredCount=service.task_environment.desired_count, maximumPercent=service.task_environment.maximum_percent, minimumHealthyPercent=service.task_environment.minimum_healthy_percent)
             service.original_running_count = (response.get('services')[0]).get('runningCount')
+            service.original_desired_count = (response.get('services')[0]).get('desiredCount')
+            service.desired_count = service.original_desired_count
             success("Create service '%s' succeeded (%d tasks running)" % (service.service_name, service.original_running_count))
 
         elif mode == ProcessMode.downscaleService:
             response = self.ecs_service.downscale_service(cluster=service.task_environment.cluster_name, service=service.service_name, maximumPercent=service.task_environment.maximum_percent, minimumHealthyPercent=service.task_environment.minimum_healthy_percent)
             service.downscale_running_count = (response.get('services')[0]).get('runningCount')
-            service.desired_count = response.get('services')[0].get('desiredCount')
+            service.desired_count = (response.get('services')[0]).get('desiredCount')
             success("Downscaling service '%s' (from %d to %d tasks) succeeded"
                  % (service.service_name, service.original_running_count, service.downscale_running_count))
 
@@ -108,7 +111,7 @@ class AwsProcess(Thread):
         elif mode == ProcessMode.upscaleService:
             response = self.ecs_service.upscale_service(cluster=service.task_environment.cluster_name, service=service.service_name, delta=service.delta, maximumPercent=service.task_environment.maximum_percent, minimumHealthyPercent=service.task_environment.minimum_healthy_percent)
             upscale_running_count = (response.get('services')[0]).get('runningCount')
-            service.desired_count = response.get('services')[0].get('desiredCount')
+            service.desired_count = (response.get('services')[0]).get('desiredCount')
             success("Upscaling service '%s' (from %d to %d tasks) succeeded"
                         % (service.service_name, service.running_count, upscale_running_count))
 
@@ -170,6 +173,7 @@ class Service(object):
         self.original_running_count = 0
         self.downscale_running_count = 0
         self.running_count = 0
+        self.original_desired_count = 0
         self.desired_count = 0
         self.delta = 0
 
@@ -319,7 +323,7 @@ class ServiceManager(object):
                 continue
             if not service.task_environment.is_downscale_task:
                 info("Downscaling service '%s' is not necessary for task downscale setting." % service.service_name)
-            elif self.is_service_zero_keep and service.desired_count == 0:
+            elif self.is_service_zero_keep and service.original_desired_count == 0:
                 # サービスのタスク数が0だったらそれを維持する
                 info("Service '%s' is zero task service. skipping." % service.service_name)
                 continue
@@ -337,7 +341,7 @@ class ServiceManager(object):
         for service in self.deploy_service_list:
             if not service.service_exists:
                 continue
-            if self.is_service_zero_keep and service.desired_count == 0:
+            if self.is_service_zero_keep and service.original_desired_count == 0:
                 # サービスのタスク数が0だったらそれを維持する
                 info("Service '%s' is zero task service. skipping." % service.service_name)
             else:
@@ -349,7 +353,7 @@ class ServiceManager(object):
         for service in self.deploy_service_list:
             if not service.service_exists:
                 continue
-            if self.is_service_zero_keep and service.desired_count == 0:
+            if self.is_service_zero_keep and service.original_desired_count == 0:
                 # サービスのタスク数が0だったらそれを維持する
                 info("Service '%s' is zero task service. skipping." % service.service_name)
             elif service.desired_count == service.task_environment.desired_count:
