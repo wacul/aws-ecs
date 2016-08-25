@@ -60,7 +60,7 @@ if [ -z "$WERCKER_AWS_ECS_TASK_DEFINITION_TEMPLATE_DIR" ]; then
   exit 1
 fi
 
-if [ -z "$WERCKER_AWS_ECS_TEMPLATE_GROUP" ]; then
+if [ ! -z "$WERCKER_AWS_ECS_TEMPLATE_GROUP" ]; then
   TEMPLATE_GROUP="--template-group $WERCKER_AWS_ECS_TEMPLATE_GROUP"
 fi
 
