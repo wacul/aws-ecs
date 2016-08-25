@@ -147,7 +147,7 @@ class TaskEnvironment(object):
                 self.minimum_healthy_percent = int(task_environment['value'])
             elif task_environment['name'] == 'MAXIMUM_PERCENT':
                 self.maximum_percent = int(task_environment['value'])
-        if self.environment is None or self.cluster_name is None or self.service_group is None or self.template_group is None or self.desired_count is None or self.minimum_running_tasks is None or self.is_downscale_task is None:
+        if self.environment is None or self.cluster_name is None or self.service_group is None or self.desired_count is None or self.minimum_running_tasks is None or self.is_downscale_task is None:
             raise EnvironmentValueNotFoundException("task_definition required environment not defined. data: %s" % (task_environment_list))
 
 class Service(object):
@@ -188,7 +188,7 @@ def init():
     parser.add_argument('--threads-count', type=int, default=10, required=False)
     parser.add_argument('--service-zero-keep', dest='service_zero_keep', default=True, action='store_true', required=False)
     parser.add_argument('--no-service-zero-keep', dest='service_zero_keep', default=True, action='store_false', required=False)
-    parser.add_argument('--template-group', dest='template_group', required=True)
+    parser.add_argument('--template-group', dest='template_group', required=False)
     parser.add_argument('--deploy-service-group', dest='deploy_service_group', required=False)
     parser.add_argument('--delete-unused-service', dest='delete_unused_service', default=True, action='store_true', required=False)
     parser.add_argument('--no-delete-unused-service', dest='delete_unused_service', default=True, action='store_false', required=False)
@@ -265,8 +265,12 @@ class ServiceManager(object):
                 if task_environment.environment != self.environment:
                     continue
                 # 同一テンプレートグループだけ
-                if task_environment.template_group != self.template_group:
-                    continue
+                if self.template_group:
+                    if not task_environment.template_group:
+                        error("Service '%s' is not set TEMPLATE_GROUP" % (service_name))
+                        continue
+                    if task_environment.template_group != self.template_group:
+                        continue
 
                 ident_service_list = [ service for service in self.service_list if service.service_name == service_name and service.task_environment.cluster_name == cluster_name ]
 
