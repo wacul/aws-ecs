@@ -61,8 +61,7 @@ if [ -z "$WERCKER_AWS_ECS_TASK_DEFINITION_TEMPLATE_DIR" ]; then
 fi
 
 if [ -z "$WERCKER_AWS_ECS_TEMPLATE_GROUP" ]; then
-  error "Please set the 'template-group' variable"
-  exit 1
+  TEMPLATE_GROUP="--template-group $WERCKER_AWS_ECS_TEMPLATE_GROUP"
 fi
 
 if [ -z "$WERCKER_AWS_ECS_TASK_DEFINITION_CONFIG_JSON" ]; then
@@ -92,7 +91,7 @@ python3 "$WERCKER_STEP_ROOT/main.py" \
     --secret "$WERCKER_AWS_ECS_SECRET" \
     --region "${WERCKER_AWS_ECS_REGION:-us-east-1}" \
     --task-definition-template-dir "$WERCKER_AWS_ECS_TASK_DEFINITION_TEMPLATE_DIR" \
-    --template-group "$WERCKER_AWS_ECS_TEMPLATE_GROUP" \
+    $TEMPLATE_GROUP \
     $NO_TASK_DEFINITION_CONFIG_ENV \
     $NO_DELETE_UNUSED_SERVICE \
     $SERVICE_ZERO_KEEP \
