@@ -28,9 +28,7 @@ class ProcessMode(Enum):
     registerTask = 0
     checkService = 1
     createService = 2
-    downscaleService = 3
     updateService = 4
-    upscaleService = 5
     runTask = 6
 
 class ProcessStatus(Enum):
@@ -95,29 +93,11 @@ class AwsProcess(Thread):
             service.desired_count = service.original_desired_count
             success("Create service '%s' succeeded (%d tasks running)" % (service.service_name, service.original_running_count))
 
-        elif mode == ProcessMode.downscaleService:
-            response = self.ecs_service.downscale_service(cluster=service.task_environment.cluster_name, service=service.service_name, maximumPercent=service.task_environment.maximum_percent, minimumHealthyPercent=service.task_environment.minimum_healthy_percent)
-            service.downscale_running_count = (response.get('services')[0]).get('runningCount')
-            service.desired_count = (response.get('services')[0]).get('desiredCount')
-            success("Downscaling service '%s' (from %d to %d tasks) succeeded"
-                 % (service.service_name, service.original_running_count, service.downscale_running_count))
-
         elif mode == ProcessMode.updateService:
-            response = self.ecs_service.update_service(cluster=service.task_environment.cluster_name, service=service.service_name, taskDefinition=service.task_definition_arn, maximumPercent=service.task_environment.maximum_percent, minimumHealthyPercent=service.task_environment.minimum_healthy_percent)
+            response = self.ecs_service.update_service(cluster=service.task_environment.cluster_name, service=service.service_name, taskDefinition=service.task_definition_arn, maximumPercent=service.task_environment.maximum_percent, minimumHealthyPercent=service.task_environment.minimum_healthy_percent, desiredCount=service.task_environment.desired_count)
             service.running_count = response.get('services')[0].get('runningCount')
             service.desired_count = response.get('services')[0].get('desiredCount')
             success("Updating service '%s' with task definition '%s' succeeded" % (service.service_name, service.task_definition_arn))
-
-        elif mode == ProcessMode.upscaleService:
-            response = self.ecs_service.upscale_service(cluster=service.task_environment.cluster_name, service=service.service_name, delta=service.delta, maximumPercent=service.task_environment.maximum_percent, minimumHealthyPercent=service.task_environment.minimum_healthy_percent)
-            upscale_running_count = (response.get('services')[0]).get('runningCount')
-            service.desired_count = (response.get('services')[0]).get('desiredCount')
-            success("Upscaling service '%s' (from %d to %d tasks) succeeded"
-                        % (service.service_name, service.running_count, upscale_running_count))
-
-        elif mode == ProcessMode.runTask:
-            response = self.ecs_service.run_task(cluster=service.task_environment.cluster_name, family=service.task_name)
-            success("Task %s succeeded" % (response.get('tasks')[0].get('taskArn')))
 
 
 class TaskEnvironment(object):
@@ -127,7 +107,6 @@ class TaskEnvironment(object):
         self.service_group = None
         self.template_group = None
         self.desired_count = None
-        self.minimum_running_tasks = None
         self.is_downscale_task = None
         self.minimum_healthy_percent = 50
         self.maximum_percent = 200
@@ -142,23 +121,24 @@ class TaskEnvironment(object):
                 self.template_group = task_environment['value']
             elif task_environment['name'] == 'DESIRED_COUNT':
                 self.desired_count = int(task_environment['value'])
-            elif task_environment['name'] == 'MINIMUM_RUNNING_TASKS':
-                self.minimum_running_tasks = int(task_environment['value'])
             elif task_environment['name'] == 'DOWNSCALE_TASK':
                 self.is_downscale_task = bool(distutils.util.strtobool(task_environment['value']))
             elif task_environment['name'] == 'MINIMUM_HEALTHY_PERCENT':
                 self.minimum_healthy_percent = int(task_environment['value'])
             elif task_environment['name'] == 'MAXIMUM_PERCENT':
                 self.maximum_percent = int(task_environment['value'])
-        if self.environment is None or self.cluster_name is None or self.service_group is None or self.desired_count is None or self.minimum_running_tasks is None or self.is_downscale_task is None:
+        if self.environment is None or self.cluster_name is None or self.service_group is None or self.desired_count is None or self.is_downscale_task is None:
             raise EnvironmentValueNotFoundException("task_definition required environment not defined. data: %s" % (task_environment_list))
+        if self.is_downscale_task:
+            self.minimum_healthy_percent = 0
+            self.maximum_percent = 100
 
 class Service(object):
     def __init__(self, task_definition):
         self.task_definition = task_definition
         try:
             self.task_environment = TaskEnvironment(task_definition['containerDefinitions'][0]['environment'])
-            self.task_name = task_definition['containerDefinitions'][0]['name']
+            self.task_name = task_definition['family']
             self.service_name = self.task_name + '-service'
         except EnvironmentValueNotFoundException:
             error("service '%s' is lack of environment" % (service_name))
@@ -171,11 +151,9 @@ class Service(object):
         self.task_definition_arn = None
         self.service_exists = False
         self.original_running_count = 0
-        self.downscale_running_count = 0
         self.running_count = 0
         self.original_desired_count = 0
         self.desired_count = 0
-        self.delta = 0
 
 
 
@@ -316,26 +294,6 @@ class ServiceManager(object):
             task_queue.put([service, ProcessMode.createService])
         task_queue.join()
 
-    def downscale_service(self):
-        h1("Step: Downscale ECS Service")
-        for service in self.deploy_service_list:
-            if not service.service_exists:
-                continue
-            if not service.task_environment.is_downscale_task:
-                info("Downscaling service '%s' is not necessary for task downscale setting." % service.service_name)
-            elif self.is_service_zero_keep and service.original_desired_count == 0:
-                # サービスのタスク数が0だったらそれを維持する
-                info("Service '%s' is zero task service. skipping." % service.service_name)
-                continue
-            elif service.original_running_count >= service.task_environment.minimum_running_tasks:
-                task_queue.put([service, ProcessMode.downscaleService])
-                service.delta = 1
-                is_downscale = True
-            else:
-                info("Downscaling service '%s' is not necessary" % service.service_name)
-                service.delta = service.task_environment.minimum_running_tasks - service.original_running_count
-        task_queue.join()
-
     def update_service(self):
         h1("Step: Update ECS Service")
         for service in self.deploy_service_list:
@@ -346,20 +304,6 @@ class ServiceManager(object):
                 info("Service '%s' is zero task service. skipping." % service.service_name)
             else:
                 task_queue.put([service, ProcessMode.updateService])
-        task_queue.join()
-
-    def upscale_service(self):
-        h1("Step: Upscale ECS Service")
-        for service in self.deploy_service_list:
-            if not service.service_exists:
-                continue
-            if self.is_service_zero_keep and service.original_desired_count == 0:
-                # サービスのタスク数が0だったらそれを維持する
-                info("Service '%s' is zero task service. skipping." % service.service_name)
-            elif service.desired_count == service.task_environment.desired_count:
-                info("Service '%s' desired count matched. skipping." % service.service_name)
-            else:
-                task_queue.put([service, ProcessMode.upscaleService])
         task_queue.join()
 
     def result_check(self):
@@ -396,9 +340,7 @@ if __name__ == '__main__':
     # Step: service
     service_manager.check_service()
     service_manager.create_service()
-    service_manager.downscale_service()
     service_manager.update_service()
-    service_manager.upscale_service()
 
 
     service_manager.result_check()
