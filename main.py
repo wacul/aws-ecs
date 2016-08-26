@@ -30,6 +30,7 @@ class ProcessMode(Enum):
     createService = 2
     updateService = 4
     runTask = 6
+    waitForStable = 7
 
 class ProcessStatus(Enum):
     normal = 0
@@ -97,7 +98,14 @@ class AwsProcess(Thread):
             response = self.ecs_service.update_service(cluster=service.task_environment.cluster_name, service=service.service_name, taskDefinition=service.task_definition_arn, maximumPercent=service.task_environment.maximum_percent, minimumHealthyPercent=service.task_environment.minimum_healthy_percent, desiredCount=service.task_environment.desired_count)
             service.running_count = response.get('services')[0].get('runningCount')
             service.desired_count = response.get('services')[0].get('desiredCount')
-            success("Updating service '%s' with task definition '%s' succeeded" % (service.service_name, service.task_definition_arn))
+            success("Update service '%s' with task definition '%s' succeeded" % (service.service_name, service.task_definition_arn))
+
+        elif mode == ProcessMode.waitForStable:
+            response = self.ecs_service.wait_for_stable(cluster=service.task_environment.cluster_name, service=service.service_name)
+            service.running_count = response.get('services')[0].get('runningCount')
+            service.desired_count = response.get('services')[0].get('desiredCount')
+            success("service '%s' (%d tasks) update completed"
+                        % (service.service_name, service.running_count))
 
 
 class TaskEnvironment(object):
@@ -203,6 +211,8 @@ class ServiceManager(object):
             if service.task_environment.cluster_name not in self.cluster_list:
                 self.cluster_list.append(service.task_environment.cluster_name)
 
+        self.error = False
+
     def delete_unused_services(self, is_delete_unused_service):
         h1("Step: Delete Unused Service")
         if not is_delete_unused_service:
@@ -235,12 +245,14 @@ class ServiceManager(object):
                 # 環境変数なし
                 if len(response_task_environment) <= 0:
                     error("Service '%s' is environment value not found" % (service_name))
+                    self.error = True
                     continue
                 try:
                     task_environment = TaskEnvironment(response_task_environment)
                 # 環境変数の値が足りない 
                 except EnvironmentValueNotFoundException:
                     error("Service '%s' is lack of environment value" % (service_name))
+                    self.error = True
                     continue
 
                 # 同一環境のものだけ
@@ -250,6 +262,7 @@ class ServiceManager(object):
                 if self.template_group:
                     if not task_environment.template_group:
                         error("Service '%s' is not set TEMPLATE_GROUP" % (service_name))
+                        self.error = True
                         continue
                     if task_environment.template_group != self.template_group:
                         continue
@@ -306,12 +319,22 @@ class ServiceManager(object):
                 task_queue.put([service, ProcessMode.updateService])
         task_queue.join()
 
+    def wait_for_stable(self):
+        h1("Step: Wait for service staus stable")
+        for service in self.deploy_service_list:
+            if not service.service_exists:
+                continue
+            else:
+                task_queue.put([service, ProcessMode.waitForStable])
+        task_queue.join()
+
     def result_check(self):
         error_service_list = list(filter(lambda service:service.status == ProcessStatus.error, self.deploy_service_list))
-        # エラーが一個でもあればエラーとしておく
+        # サービスでエラーが一個でもあれば失敗としておく
         if len(error_service_list) > 0:
             sys.exit(1)
-
+        if self.error:
+            sys.exit(1)
 
 if __name__ == '__main__':
     args = init()
@@ -341,6 +364,7 @@ if __name__ == '__main__':
     service_manager.check_service()
     service_manager.create_service()
     service_manager.update_service()
+    service_manager.wait_for_stable()
 
 
     service_manager.result_check()

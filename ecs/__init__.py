@@ -183,6 +183,9 @@ class ECSService(object):
                 },
                 desiredCount=desiredCount)
 
+        return self.describe_service(cluster=cluster, service=service)
+
+    def wait_for_stable(self, cluster, service):
         # Waiting for the service update is done
         waiter = self.client.get_waiter('services_stable')
         waiter.wait(cluster=cluster, services=[service])

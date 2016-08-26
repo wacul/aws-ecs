@@ -58,10 +58,6 @@ deploy:
             "value": "2"
           },
           {
-            "name": "MINIMUM_RUNNING_TASKS",
-            "value": "1"
-          },
-          {
             "name": "DOWNSCALE_TASK",
             "value": false
           }
