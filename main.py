@@ -81,6 +81,7 @@ class AwsProcess(Thread):
             if response['services'][0]['status'] == 'INACTIVE':
                 error("Service '%s' status is INACTIVE." % (service.service_name))
                 return
+            service.original_task_definition = (response.get('services')[0]).get('taskDefinition')
             service.original_running_count = (response.get('services')[0]).get('runningCount')
             service.original_desired_count = (response.get('services')[0]).get('desiredCount')
             service.desired_count = service.original_desired_count
@@ -104,6 +105,7 @@ class AwsProcess(Thread):
             response = self.ecs_service.wait_for_stable(cluster=service.task_environment.cluster_name, service=service.service_name)
             service.running_count = response.get('services')[0].get('runningCount')
             service.desired_count = response.get('services')[0].get('desiredCount')
+            self.ecs_service.deregister_task_definition(service.original_task_definition)
             success("service '%s' (%d tasks) update completed"
                         % (service.service_name, service.running_count))
 
@@ -156,6 +158,7 @@ class Service(object):
 
         self.status = ProcessStatus.normal
 
+        self.original_task_definition = None
         self.task_definition_arn = None
         self.service_exists = False
         self.original_running_count = 0

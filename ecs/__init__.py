@@ -108,8 +108,6 @@ class ECSService(object):
     def register_task_definition(self, task_definition):
         """
         Register the task definition contained in the file
-        :param family: the task definition name
-        :param file: the task definition content file
         :param task_definition: the task definition
         :return: the response or raise an Exception
         """
@@ -131,6 +129,9 @@ class ECSService(object):
             arn = task_definition.get('taskDefinitionArn')
             raise Exception('Task definition (%s) is inactive' % arn)
         return response
+
+    def deregister_task_definition(self, taskDefinition):
+        return self.client.deregister_task_definition(taskDefinition=taskDefinition)
 
     def downscale_service(self, cluster, service, maximumPercent, minimumHealthyPercent, delta=1):
         """
