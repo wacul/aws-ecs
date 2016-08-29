@@ -131,17 +131,12 @@ class TaskEnvironment(object):
                 self.template_group = task_environment['value']
             elif task_environment['name'] == 'DESIRED_COUNT':
                 self.desired_count = int(task_environment['value'])
-            elif task_environment['name'] == 'DOWNSCALE_TASK':
-                self.is_downscale_task = bool(distutils.util.strtobool(task_environment['value']))
             elif task_environment['name'] == 'MINIMUM_HEALTHY_PERCENT':
                 self.minimum_healthy_percent = int(task_environment['value'])
             elif task_environment['name'] == 'MAXIMUM_PERCENT':
                 self.maximum_percent = int(task_environment['value'])
-        if self.environment is None or self.cluster_name is None or self.service_group is None or self.desired_count is None or self.is_downscale_task is None:
+        if self.environment is None or self.cluster_name is None or self.service_group is None or self.desired_count is None:
             raise EnvironmentValueNotFoundException("task_definition required environment not defined. data: %s" % (task_environment_list))
-        if self.is_downscale_task:
-            self.minimum_healthy_percent = 0
-            self.maximum_percent = 100
 
 class Service(object):
     def __init__(self, task_definition):

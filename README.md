@@ -58,8 +58,12 @@ deploy:
             "value": "2"
           },
           {
-            "name": "DOWNSCALE_TASK",
-            "value": false
+            "name": "MINIMUM_HEALTHY_PERCENT",
+            "value": "50"
+          },
+          {
+            "name": "MAXIMUM_PERCENT",
+            "value": "100"
           }
         ],
         "name": "{{environment}}-web",
