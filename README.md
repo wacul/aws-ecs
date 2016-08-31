@@ -29,9 +29,9 @@ deploy:
 }
 ```
 
-##### `templates/example.template`
+##### `templates/example.template.j2`
 
-```json
+```
 [
   {
     "family": "{{environment}}-web",
@@ -41,6 +41,7 @@ deploy:
           {
             "name": "CLUSTER_NAME",
             "value": "cluster"
+          },
           {
             "name": "TEMPLATE_GROUP",
             "value": "app"
@@ -72,7 +73,7 @@ deploy:
             "protocol": "tcp"
           }
         ],
-        "memory": {{memory}},
+        "memoryReservation": {{memory}},
         "essential": true
       }
     ]
