@@ -64,7 +64,7 @@ deploy:
           }
         ],
         "name": "{{environment}}-web",
-        "image": "helloworld"
+        "image": "helloworld",
         "cpu": {{cpu}},
         "portMappings": [
           {
