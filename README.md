@@ -5,7 +5,7 @@ The step is written in Python 3.5 and use Pip and Boto3 module.
 
 ## Example
 
-##### `wercker.yml`
+#### `wercker.yml`
 
 
 * `key` (required): AWS Access Key ID
@@ -31,7 +31,7 @@ deploy:
       template-group: back
 ```
 
-##### `infra/conf/dev.conf`
+#### `infra/conf/dev.conf`
 
 `environment` parameter is required. only same task-definition's environment `ENVIRONMENT` service is deployed.
 
@@ -43,7 +43,7 @@ deploy:
 }
 ```
 
-##### `infra/template/example.template.j2`
+#### `infra/template/example.template.j2`
 
 http://docs.aws.amazon.com/AmazonECS/latest/developerguide/task_definition_parameters.html
 
