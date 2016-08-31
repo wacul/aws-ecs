@@ -3,19 +3,11 @@ Wercker step for AWS ECS
 
 The step is written in Python 3.5 and use Pip and Boto3 module.
 
-#### Step [Configuring AWS](http://docs.aws.amazon.com/cli/latest/reference/configure/index.html)
-
-This initial step consists on configuring AWS.
-
-The following configuration allows to setup this step :
-
-* `key` (required): AWS Access Key ID
-* `secret` (required): AWS Secret Access Key
-* `region` (optional): Default region name
-
 ## Example
 
-```wercker.yml
+##### `wercker.yml`
+
+```yml
 deploy:
   steps:
     - wacul/aws-ecs:
@@ -27,7 +19,9 @@ deploy:
         template-group: app
 ```
 
-```json:conf/dev.conf
+##### `conf/dev.conf`
+
+```json
 {
   "environment": "development",
   "cpu": 16,
@@ -35,7 +29,9 @@ deploy:
 }
 ```
 
-```templates/example.template
+##### `templates/example.template`
+
+```json
 [
   {
     "family": "{{environment}}-web",
