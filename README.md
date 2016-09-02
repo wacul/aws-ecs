@@ -16,7 +16,7 @@ The step is written in Python 3.5 and use Pip and Boto3 module.
 * `deploy-service-group` (optional): deployment service group. if not set, all service is deployed. deploy-service-group is setting by task-definitions environment `SERVICE_GROUP` value.
 * `delete-unused-service` (optional): If template file is deleted, then related service is delete.  (default: true)
 * `template-group` (optional): for multiple repositories deployment. on delete-unused-service, can not found template file's service is delete. But, when multiple repositories deploy, template file is divided. Then, setting `template-group`,  only task-definition's environment `TEMPLATE_GROUP` is deployed target.  only affect to delete-unused-service.
-* `threads-count` (optional): deployment thread size. default: 10
+* `threads-count` (optional): deployment thread size. (default: 10)
 
 ```yml
 deploy:
@@ -43,7 +43,7 @@ deploy:
 }
 ```
 
-#### `infra/template/example.template.j2`
+#### `infra/template/example.j2`
 
 http://docs.aws.amazon.com/AmazonECS/latest/developerguide/task_definition_parameters.html
 
@@ -93,12 +93,12 @@ http://docs.aws.amazon.com/AmazonECS/latest/developerguide/task_definition_param
           }
         ],
         "name": "{{environment}}-web",
-        "image": "helloworld",
+        "image": "nginx",
         "cpu": {{cpu}},
         "portMappings": [
           {
             "hostPort": 0,
-            "containerPort": 8080,
+            "containerPort": 80,
             "protocol": "tcp"
           }
         ],
