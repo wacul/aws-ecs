@@ -13,6 +13,7 @@ from queue import Queue, Empty
 from threading import Thread
 from enum import Enum
 import distutils.util
+from botocore.exceptions import WaiterError
 
 
 logging.basicConfig(stream=sys.stdout, level=logging.INFO, format='%(message)s')
@@ -102,7 +103,16 @@ class AwsProcess(Thread):
             success("Update service '%s' with task definition '%s' succeeded" % (service.service_name, service.task_definition_arn))
 
         elif mode == ProcessMode.waitForStable:
-            response = self.ecs_service.wait_for_stable(cluster=service.task_environment.cluster_name, service=service.service_name)
+            retryCount = 0
+            while True:
+                try:
+                    response = self.ecs_service.wait_for_stable(cluster=service.task_environment.cluster_name, service=service.service_name)
+                except WaiterError:
+                    if retryCount > 2:
+                        break
+                    retryCount = rectryCount + 1
+                    continue
+                break
             service.running_count = response.get('services')[0].get('runningCount')
             service.desired_count = response.get('services')[0].get('desiredCount')
             self.ecs_service.deregister_task_definition(service.original_task_definition)
@@ -199,6 +209,9 @@ class ServiceManager(object):
             self.deploy_service_list = list(filter(lambda service:service.task_environment.service_group == args.deploy_service_group, self.service_list))
         else:
             self.deploy_service_list = self.service_list
+        if len(self.deploy_service_list) == 0:
+            error("Deployment target service is None.")
+            sys.exit(1)
         self.ecs_service = ECSService(access_key=args.key, secret_key=args.secret, region=args.region)
         self.is_service_zero_keep = args.service_zero_keep
         self.environment = task_definition_config_json['environment']
@@ -318,7 +331,7 @@ class ServiceManager(object):
         task_queue.join()
 
     def wait_for_stable(self):
-        h1("Step: Wait for service staus stable")
+        h1("Step: Wait for Service Status 'Stable'")
         for service in self.deploy_service_list:
             if not service.service_exists:
                 continue
