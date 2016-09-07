@@ -175,7 +175,6 @@ class Service(object):
 
 # Arguments parsing
 def init():
-    sys.stdout.buffer.write(chr(9986).encode('utf8'))
     parser = argparse.ArgumentParser(description='Deploy Service on ECS')
     parser.add_argument('--key', dest='key', required=True)
     parser.add_argument('--secret', dest='secret', required=True)
