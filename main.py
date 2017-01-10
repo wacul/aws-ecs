@@ -91,7 +91,7 @@ class AwsProcess(Thread):
             success("Checking service '%s' succeeded (%d tasks running)" % (service.service_name, service.original_running_count))
 
         elif mode == ProcessMode.createService:
-            response = self.ecs_service.create_service(cluster=service.task_environment.cluster_name, service=service.service_name, taskDefinition=service.task_definition_arn, desiredCount=service.task_environment.desired_count, maximumPercent=service.task_environment.maximum_percent, minimumHealthyPercent=service.task_environment.minimum_healthy_percent, disctinctInstance = service.task_environment.distinct_instance)
+            response = self.ecs_service.create_service(cluster=service.task_environment.cluster_name, service=service.service_name, taskDefinition=service.task_definition_arn, desiredCount=service.task_environment.desired_count, maximumPercent=service.task_environment.maximum_percent, minimumHealthyPercent=service.task_environment.minimum_healthy_percent, distinctInstance=service.task_environment.distinct_instance)
             service.original_running_count = (response.get('services')[0]).get('runningCount')
             service.original_desired_count = (response.get('services')[0]).get('desiredCount')
             service.desired_count = service.original_desired_count
