@@ -96,7 +96,12 @@ class ECSService(object):
                 deploymentConfiguration={
                     'maximumPercent': maximumPercent,
                     'minimumHealthyPercent': minimumHealthyPercent
-                }
+                },
+                placementConstraints=[
+                    {
+                        'type': 'distinctInstance'
+                    }
+                ]
             )
         else:
             response = self.client.create_service(
@@ -107,12 +112,7 @@ class ECSService(object):
                 deploymentConfiguration={
                     'maximumPercent': maximumPercent,
                     'minimumHealthyPercent': minimumHealthyPercent
-                },
-                placementConstraints=[
-                    {
-                        'type': 'distinctInstance'
-                    }
-                ]
+                }
             )
         failures = response.get('failures')
         if failures:
