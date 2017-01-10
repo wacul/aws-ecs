@@ -58,6 +58,7 @@ this script use environment variables below:
 * `DESIRED_COUNT` (required): ecs service's desired count.
 * `MINIMUM_HEALTHY_PERCENT` (optional): ecs service's minimum_healthy_percent. (default: 50)
 * `MAXIMUM_PERCENT` (optional): ecs service's maximum_percent. (default: 200)
+* `DISTINCT_INSTANCE` (optional): ecs service placementConstraints type is distinctInstance (default: False)
 
 
 ```

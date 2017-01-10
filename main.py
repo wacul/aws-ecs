@@ -14,6 +14,7 @@ from threading import Thread
 from enum import Enum
 import distutils.util
 from botocore.exceptions import WaiterError
+from distutils.util import strtobool
 
 
 logging.basicConfig(stream=sys.stdout, level=logging.INFO, format='%(message)s')
@@ -90,7 +91,7 @@ class AwsProcess(Thread):
             success("Checking service '%s' succeeded (%d tasks running)" % (service.service_name, service.original_running_count))
 
         elif mode == ProcessMode.createService:
-            response = self.ecs_service.create_service(cluster=service.task_environment.cluster_name, service=service.service_name, taskDefinition=service.task_definition_arn, desiredCount=service.task_environment.desired_count, maximumPercent=service.task_environment.maximum_percent, minimumHealthyPercent=service.task_environment.minimum_healthy_percent)
+            response = self.ecs_service.create_service(cluster=service.task_environment.cluster_name, service=service.service_name, taskDefinition=service.task_definition_arn, desiredCount=service.task_environment.desired_count, maximumPercent=service.task_environment.maximum_percent, minimumHealthyPercent=service.task_environment.minimum_healthy_percent, disctinctInstance = self.distinct_instance)
             service.original_running_count = (response.get('services')[0]).get('runningCount')
             service.original_desired_count = (response.get('services')[0]).get('desiredCount')
             service.desired_count = service.original_desired_count
@@ -130,6 +131,7 @@ class TaskEnvironment(object):
         self.is_downscale_task = None
         self.minimum_healthy_percent = 50
         self.maximum_percent = 200
+        self.distinct_instance = False
         for task_environment in task_environment_list:
             if task_environment['name'] == 'ENVIRONMENT':
                 self.environment = task_environment['value']
@@ -145,6 +147,8 @@ class TaskEnvironment(object):
                 self.minimum_healthy_percent = int(task_environment['value'])
             elif task_environment['name'] == 'MAXIMUM_PERCENT':
                 self.maximum_percent = int(task_environment['value'])
+            elif task_environment['name'] == 'DISTINCT_INSTANCE':
+                self.distinct_instance = strtobool(task_environment['value'])
         if self.environment is None or self.cluster_name is None or self.service_group is None or self.desired_count is None:
             raise EnvironmentValueNotFoundException("task_definition required environment not defined. data: %s" % (task_environment_list))
 

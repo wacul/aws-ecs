@@ -75,7 +75,7 @@ class ECSService(object):
             service_list = service_list[10:]
         return result
 
-    def create_service(self, cluster, service, taskDefinition, desiredCount, maximumPercent, minimumHealthyPercent):
+    def create_service(self, cluster, service, taskDefinition, desiredCount, maximumPercent, minimumHealthyPercent, distinctInstance):
         """
         Create service
         :param cluster: the cluster name
@@ -84,18 +84,36 @@ class ECSService(object):
         :param desiredCount: desiredCount
         :param maximumPercent: maximumPercent
         :param minimumHealthyPercent: minimumHealthyPercent
+        :param distinctInstance: placementConstraints distictInstance
         :return: the response or raise an Exception
         """
-        response = self.client.create_service(
-            cluster=cluster,
-            serviceName=service,
-            taskDefinition=taskDefinition,
-            desiredCount=desiredCount,
-            deploymentConfiguration={
-                'maximumPercent': maximumPercent,
-                'minimumHealthyPercent': minimumHealthyPercent
-            }
-        )
+        if distinctInstance:
+            response = self.client.create_service(
+                cluster=cluster,
+                serviceName=service,
+                taskDefinition=taskDefinition,
+                desiredCount=desiredCount,
+                deploymentConfiguration={
+                    'maximumPercent': maximumPercent,
+                    'minimumHealthyPercent': minimumHealthyPercent
+                }
+            )
+        else:
+            response = self.client.create_service(
+                cluster=cluster,
+                serviceName=service,
+                taskDefinition=taskDefinition,
+                desiredCount=desiredCount,
+                deploymentConfiguration={
+                    'maximumPercent': maximumPercent,
+                    'minimumHealthyPercent': minimumHealthyPercent
+                },
+                placementConstraints=[
+                    {
+                        'type': 'distinctInstance'
+                    }
+                ]
+            )
         failures = response.get('failures')
         if failures:
             raise Exception("Service '%s' is %s in cluster '%s'" % (service, failures[0].get('reason'), cluster))
