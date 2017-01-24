@@ -69,12 +69,16 @@ class AwsProcess(Thread):
             return
 
         if mode == ProcessMode.registerTask:
+            retryCount = 0
             while True:
                 try:
                     response = self.ecs_service.register_task_definition(task_definition=service.task_definition)
                 except ClientError as e:
                     error_code = e.response['Error']['Code']
                     if error_code == 'ThrottlingException':
+                        if retryCount > 3:
+                            break
+                        retryCount = retryCount + 1
                         time.sleep(3)
                         continue
                     else:
@@ -128,12 +132,16 @@ class AwsProcess(Thread):
             service.running_count = response.get('services')[0].get('runningCount')
             service.desired_count = response.get('services')[0].get('desiredCount')
 
+            retryCount = 0
             while True:
                 try:
                     self.ecs_service.deregister_task_definition(service.original_task_definition)
                 except ClientError as e:
                     error_code = e.response['Error']['Code']
                     if error_code == 'ThrottlingException':
+                        if retryCount > 3:
+                            break
+                        retryCount = retryCount + 1
                         time.sleep(3)
                         continue
                     else:
