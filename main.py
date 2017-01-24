@@ -127,7 +127,18 @@ class AwsProcess(Thread):
                 break
             service.running_count = response.get('services')[0].get('runningCount')
             service.desired_count = response.get('services')[0].get('desiredCount')
-            self.ecs_service.deregister_task_definition(service.original_task_definition)
+
+            while True:
+                try:
+                    self.ecs_service.deregister_task_definition(service.original_task_definition)
+                except ClientError as e:
+                    error_code = e.response['Error']['Code']
+                    if error_code == 'ThrottlingException':
+                        time.sleep(3)
+                        continue
+                    else:
+                        raise
+                break
             success("service '%s' (%d tasks) update completed"
                         % (service.service_name, service.running_count))
 
