@@ -14,6 +14,7 @@ from threading import Thread
 from enum import Enum
 import distutils.util
 from botocore.exceptions import WaiterError
+from botocore.exceptions import ClientError
 from distutils.util import strtobool
 
 
@@ -68,11 +69,20 @@ class AwsProcess(Thread):
             return
 
         if mode == ProcessMode.registerTask:
-            response = self.ecs_service.register_task_definition(task_definition=service.task_definition)
+            while True:
+                try:
+                    response = self.ecs_service.register_task_definition(task_definition=service.task_definition)
+                except ClientError as e:
+                    error_code = e.response['Error']['Code']
+                    if error_code == 'ThrottlingException':
+                        time.sleep(3)
+                        continue
+                    else:
+                        raise
             service.task_definition_arn = response.get('taskDefinition').get('taskDefinitionArn')
             success("Registering task definition '%s' succeeded (arn: '%s')" % (service.task_name, service.task_definition_arn))
             # for register task rate limit
-            time.sleep(3)
+            time.sleep(1)
 
         elif mode == ProcessMode.checkService:
             try:
