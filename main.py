@@ -77,7 +77,7 @@ class AwsProcess(Thread):
                     error_code = e.response['Error']['Code']
                     if error_code == 'ThrottlingException':
                         if retryCount > 3:
-                            break
+                            raise
                         retryCount = retryCount + 1
                         time.sleep(3)
                         continue
@@ -87,7 +87,7 @@ class AwsProcess(Thread):
             service.task_definition_arn = response.get('taskDefinition').get('taskDefinitionArn')
             success("Registering task definition '%s' succeeded (arn: '%s')" % (service.task_name, service.task_definition_arn))
             # for register task rate limit
-            time.sleep(1)
+            time.sleep(3)
 
         elif mode == ProcessMode.checkService:
             try:
@@ -125,7 +125,7 @@ class AwsProcess(Thread):
                     response = self.ecs_service.wait_for_stable(cluster=service.task_environment.cluster_name, service=service.service_name)
                 except WaiterError:
                     if retryCount > 2:
-                        break
+                        raise
                     retryCount = retryCount + 1
                     continue
                 break
@@ -140,7 +140,7 @@ class AwsProcess(Thread):
                     error_code = e.response['Error']['Code']
                     if error_code == 'ThrottlingException':
                         if retryCount > 3:
-                            break
+                            raise
                         retryCount = retryCount + 1
                         time.sleep(3)
                         continue
