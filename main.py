@@ -79,6 +79,7 @@ class AwsProcess(Thread):
                         continue
                     else:
                         raise
+                break
             service.task_definition_arn = response.get('taskDefinition').get('taskDefinitionArn')
             success("Registering task definition '%s' succeeded (arn: '%s')" % (service.task_name, service.task_definition_arn))
             # for register task rate limit
