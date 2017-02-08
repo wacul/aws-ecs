@@ -243,6 +243,8 @@ class ServiceManager(object):
             self.deploy_service_list = list(filter(lambda service:service.task_environment.service_group == args.deploy_service_group, self.service_list))
         else:
             self.deploy_service_list = self.service_list
+        if args.template_group:
+            self.deploy_service_list = list(filter(lambda service:service.task_environment.template_group == args.template_group, self.deploy_service_list))
         if len(self.deploy_service_list) == 0:
             error("Deployment target service is None.")
             sys.exit(1)
