@@ -15,7 +15,7 @@ The step is written in Python 3.5 and use Pip and Boto3 module.
 * `task-definition-json` (required): jinja2 template input json data file. `environment:` parameter is required. only same task-definition's environment `ENVIRONMENT` service is deployed.
 * `deploy-service-group` (optional): deployment service group. if not set, all service is deployed. deploy-service-group is setting by task-definitions environment `SERVICE_GROUP` value.
 * `delete-unused-service` (optional): If template file is deleted, then related service is deleted.  (default: true)
-* `template-group` (optional): for multiple repositories deployment. on delete-unused-service, can not found template file's service is delete. But, when multiple repositories deploy, template file is divided. Then, setting `template-group`,  only task-definition's environment `TEMPLATE_GROUP` is deployed target.  only affect to delete-unused-service.
+* `template-group` (optional): for multiple repositories deployment. When with multiple repositories, template file is divided. Then, match between `template-group` and task-definition's environment `TEMPLATE_GROUP` is deploy and delete target.
 * `threads-count` (optional): deployment thread size. (default: 10)
 
 ```yml
