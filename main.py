@@ -44,9 +44,10 @@ class EnvironmentValueNotFoundException(Exception):
         return repr(self.value)
 
 class AwsProcess(Thread):
-    def __init__(self, key, secret, region):
+    def __init__(self, key, secret, region, is_service_zero_keep):
         super().__init__()
         self.ecs_service = ECSService(access_key=key, secret_key=secret, region=region)
+        self.is_service_zero_keep = is_service_zero_keep
 
     def run(self):
         while True:
@@ -113,7 +114,11 @@ class AwsProcess(Thread):
             success("Create service '%s' succeeded (%d tasks running)" % (service.service_name, service.original_running_count))
 
         elif mode == ProcessMode.updateService:
-            response = self.ecs_service.update_service(cluster=service.task_environment.cluster_name, service=service.service_name, taskDefinition=service.task_definition_arn, maximumPercent=service.task_environment.maximum_percent, minimumHealthyPercent=service.task_environment.minimum_healthy_percent, desiredCount=service.task_environment.desired_count)
+            desiredCount = service.task_environment.desired_count
+            # サービスのタスク数が0だったらそれを維持する
+            if self.is_service_zero_keep and service.original_desired_count == 0:
+                desiredCount = 0
+            response = self.ecs_service.update_service(cluster=service.task_environment.cluster_name, service=service.service_name, taskDefinition=service.task_definition_arn, maximumPercent=service.task_environment.maximum_percent, minimumHealthyPercent=service.task_environment.minimum_healthy_percent, desiredCount=desiredCount)
             service.running_count = response.get('services')[0].get('runningCount')
             service.desired_count = response.get('services')[0].get('desiredCount')
             success("Update service '%s' with task definition '%s' succeeded" % (service.service_name, service.task_definition_arn))
@@ -359,11 +364,7 @@ class ServiceManager(object):
         for service in self.deploy_service_list:
             if not service.service_exists:
                 continue
-            if self.is_service_zero_keep and service.original_desired_count == 0:
-                # サービスのタスク数が0だったらそれを維持する
-                info("Service '%s' is zero task service. skipping." % service.service_name)
-            else:
-                task_queue.put([service, ProcessMode.updateService])
+            task_queue.put([service, ProcessMode.updateService])
         task_queue.join()
 
     def wait_for_stable(self):
@@ -394,7 +395,7 @@ if __name__ == '__main__':
         threads_count = len(service_manager.deploy_service_list)
     # threadの開始
     for i in range(threads_count):
-        thread = AwsProcess(args.key, args.secret, args.region)
+        thread = AwsProcess(args.key, args.secret, args.region, args.service_zero_keep)
         thread.setDaemon(True)
         thread.start()
 

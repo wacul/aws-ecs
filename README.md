@@ -17,6 +17,7 @@ The step is written in Python 3.5 and use Pip and Boto3 module.
 * `delete-unused-service` (optional): If template file is deleted, then related service is deleted.  (default: true)
 * `template-group` (optional): for multiple repositories deployment. When with multiple repositories, template file is divided. Then, match between `template-group` and task-definition's environment `TEMPLATE_GROUP` is deploy and delete target.
 * `threads-count` (optional): deployment thread size. (default: 10)
+* `service-zero-keep` (optional): desired count zero's service keep service desired count. (defalut: true)
 
 ```yml
 deploy:
