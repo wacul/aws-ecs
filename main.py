@@ -77,10 +77,10 @@ class AwsProcess(Thread):
                 except ClientError as e:
                     error_code = e.response['Error']['Code']
                     if error_code == 'ThrottlingException':
-                        if retryCount > 3:
+                        if retryCount > 6:
                             raise
                         retryCount = retryCount + 1
-                        time.sleep(3)
+                        time.sleep(10)
                         continue
                     else:
                         raise
