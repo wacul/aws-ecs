@@ -8,8 +8,8 @@ The step is written in Python 3.5 and use Pip and Boto3 module.
 #### `wercker.yml`
 
 
-* `key` (required): AWS Access Key ID
-* `secret` (required): AWS Secret Access Key
+* `key` (optional): AWS Access Key ID
+* `secret` (optional): AWS Secret Access Key
 * `region` (optional): Region name (default: us-east-1)
 * `task-definition-template-dir` (required): ecs task-definition jinja2 template files directory. all files below directory is loaded.
 * `task-definition-json` (required): jinja2 template input json data file. `environment:` parameter is required. only same task-definition's environment `ENVIRONMENT` service is deployed.

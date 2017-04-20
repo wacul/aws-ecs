@@ -215,8 +215,8 @@ class Service(object):
 # Arguments parsing
 def init():
     parser = argparse.ArgumentParser(description='Deploy Service on ECS')
-    parser.add_argument('--key', dest='key', required=True)
-    parser.add_argument('--secret', dest='secret', required=True)
+    parser.add_argument('--key', dest='key', default="")
+    parser.add_argument('--secret', dest='secret', default="")
     parser.add_argument('--region', dest='region', default='us-east-1')
     parser.add_argument('--task-definition-template-dir', dest='task_definition_template_dir', required=True)
     parser.add_argument('--task-definition-config-json', dest='task_definition_config_json', required=True)
