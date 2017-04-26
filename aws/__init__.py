@@ -5,7 +5,7 @@ class ServiceNotFoundException(Exception):
     def __str__(self):
         return repr(self.value)
 
-class ECSService(object):
+class AwsUtils(object):
     def __init__(self, access_key, secret_key, region='us-east-1'):
         session = Session(aws_access_key_id=access_key, aws_secret_access_key=secret_key, region_name=region)
         self.client = session.client('ecs')
