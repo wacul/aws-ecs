@@ -120,18 +120,9 @@ class Service(object):
 
         return service_list, deploy_service_list
 
-class RunTask(object):
-    def __init__(self):
-        try:
-            self.task_definitions = render.render_definition("", file, task_definition_config_json, task_definition_config_env)
-        except:
-            error("Template error. file: %s.\n%s" % (file, traceback.format_exc()))
-            sys.exit(1)
-
-
 class EcsUtils(object):
     @staticmethod
-    def register_task(awsutils, task_definition):
+    def register_task_definition(awsutils, task_definition):
         retryCount = 0
         while True:
             try:
@@ -181,3 +172,33 @@ class EcsUtils(object):
                 else:
                    raise
             break
+
+
+    @staticmethod
+    def check_task_definition(awsutils, task_definition_name):
+        try:
+            response = awsutils.describe_task_definition(task_definition_name)
+        except ClientError as e:
+            return None
+        return response.get('taskDefinition')
+
+    @staticmethod
+    def is_same_task_definition(task_definition, latest_task_definition):
+        if not len(task_definition.get('containerDefinitions')) == len(latest_task_definition.get('containerDefinitions')):
+            return False
+        for i in range(len(task_definition.get('containerDefinitions'))):
+            if not compare(task_definition.get('containerDefinitions')[i], latest_task_definition.get('containerDefinitions')[i]):
+                return False
+        return True
+
+def compare(a, b):
+    for k, v in a.items():
+        if isinstance(v, dict):
+            if not compare(v, b.get(k)):
+                return False
+        if isinstance(v, list):
+            if not v == b.get(k):
+                return False
+        if not v == b.get(k):
+            return False
+    return True

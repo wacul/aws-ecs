@@ -115,3 +115,12 @@ this script use environment variables below:
   }
 ]
 ```
+
+## Docker
+```
+docker run -it --rm -e "AWS_PROFILE=profile" -v $HOME/.aws/:/root/.aws/  -v $(pwd)/infra/:/infra quay.io/wacul/aws-ecs --task-definition-template-dir /infra/template/ --task-definition-config-json /infra/conf/environment.json --template-group web
+```
+
+```
+docker run -it --rm -v $(pwd)/infra/:/infra quay.io/wacul/aws-ecs taskrun --task-definition-template-file /infra/task.json --task-definition-config-json /infra/conf/environment.json --cluster cluster --tumeout 600
+```

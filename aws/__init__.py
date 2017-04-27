@@ -23,9 +23,6 @@ class AwsUtils(object):
             raise Exception("Cluster '%s' is %s" % (cluster, failures[0].get('reason')))
         return response
 
-    def describe_tasks(self, cluster, task_list):
-        return self.client.describe_tasks(cluster=cluster, tasks=task_list)
-
     def describe_task_definition(self, taskDefinition):
         return self.client.describe_task_definition(taskDefinition=taskDefinition)
 
@@ -224,19 +221,13 @@ class AwsUtils(object):
             raise Exception('Task %s failed: %s' % (failures[0].get('arn'), failures[0].get('reason')))
 
         taskArn = (response.get('tasks')[0]).get('taskArn')
-        waiter = self.client.get_waiter('tasks_stopped')
-        waiter.wait(cluster=cluster, tasks=[taskArn])
+        return taskArn
 
+    def describe_task(self, cluster, taskArn):
         response = self.client.describe_tasks(cluster=cluster, tasks=[taskArn])
 
         failures = response.get('failures')
         if failures:
             raise Exception('Can\'t retreive task %s description: %s' % (failures[0].get('arn'), failures[0].get('reason')))
 
-        task = response.get('tasks')[0]
-        container = task.get('containers')[0]
-        exitCode = container.get('exitCode')
-        if exitCode != 0:
-            raise Exception('Task %s return exit code %s: %s' % (task.get('arn'), exitCode, container.get('reason')))
-
-        return response
+        return response.get('tasks')[0]

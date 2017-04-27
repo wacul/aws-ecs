@@ -39,40 +39,19 @@ class ServiceProcess(Thread):
         if mode == ProcessMode.registerTask:
             # for register task rate limit
             time.sleep(randint(1,3))
-            service.task_definition_arn = EcsUtils.register_task(self.awsutils, service.task_definition)
+            service.task_definition_arn = EcsUtils.register_task_definition(self.awsutils, service.task_definition)
             success("Registering task definition '%s' succeeded (arn: '%s')" % (service.task_name, service.task_definition_arn))
 
         elif mode == ProcessMode.checkService:
-            try:
-                response = self.awsutils.describe_service(service.task_environment.cluster_name, service.service_name)
-            except ServiceNotFoundException:
-                error("Service '%s' not Found." % (service.service_name))
-                return
-            if response['services'][0]['status'] == 'INACTIVE':
-                error("Service '%s' status is INACTIVE." % (service.service_name))
-                return
-            service.original_task_definition = (response.get('services')[0]).get('taskDefinition')
-            service.original_running_count = (response.get('services')[0]).get('runningCount')
-            service.original_desired_count = (response.get('services')[0]).get('desiredCount')
-            service.desired_count = service.original_desired_count
-            service.service_exists = True
+            self.check_service(service)
             success("Checking service '%s' succeeded (%d tasks running)" % (service.service_name, service.original_running_count))
 
         elif mode == ProcessMode.createService:
-            response = self.awsutils.create_service(cluster=service.task_environment.cluster_name, service=service.service_name, taskDefinition=service.task_definition_arn, desiredCount=service.task_environment.desired_count, maximumPercent=service.task_environment.maximum_percent, minimumHealthyPercent=service.task_environment.minimum_healthy_percent, distinctInstance=service.task_environment.distinct_instance)
-            service.original_running_count = (response.get('services')[0]).get('runningCount')
-            service.original_desired_count = (response.get('services')[0]).get('desiredCount')
-            service.desired_count = service.original_desired_count
+            self.create_service(service)
             success("Create service '%s' succeeded (%d tasks running)" % (service.service_name, service.original_running_count))
 
         elif mode == ProcessMode.updateService:
-            desiredCount = service.task_environment.desired_count
-            # サービスのタスク数が0だったらそれを維持する
-            if self.is_service_zero_keep and service.original_desired_count == 0:
-                desiredCount = 0
-            response = self.awsutils.update_service(cluster=service.task_environment.cluster_name, service=service.service_name, taskDefinition=service.task_definition_arn, maximumPercent=service.task_environment.maximum_percent, minimumHealthyPercent=service.task_environment.minimum_healthy_percent, desiredCount=desiredCount)
-            service.running_count = response.get('services')[0].get('runningCount')
-            service.desired_count = response.get('services')[0].get('desiredCount')
+            self.update_service(service)
             success("Update service '%s' with task definition '%s' succeeded" % (service.service_name, service.task_definition_arn))
 
         elif mode == ProcessMode.waitForStable:
@@ -80,6 +59,37 @@ class ServiceProcess(Thread):
             EcsUtils.deregister_task_definition(self.awsutils, service)
             success("service '%s' (%d tasks) update completed"
                         % (service.service_name, service.running_count))
+
+    def check_service(self, service):
+        try:
+            response = self.awsutils.describe_service(service.task_environment.cluster_name, service.service_name)
+        except ServiceNotFoundException:
+            error("Service '%s' not Found." % (service.service_name))
+            return
+        if response['services'][0]['status'] == 'INACTIVE':
+            error("Service '%s' status is INACTIVE." % (service.service_name))
+            return
+        service.original_task_definition = (response.get('services')[0]).get('taskDefinition')
+        service.original_running_count = (response.get('services')[0]).get('runningCount')
+        service.original_desired_count = (response.get('services')[0]).get('desiredCount')
+        service.desired_count = service.original_desired_count
+        service.service_exists = True
+
+    @staticmethod
+    def create_service(self, service):
+        response = self.awsutils.create_service(cluster=service.task_environment.cluster_name, service=service.service_name, taskDefinition=service.task_definition_arn, desiredCount=service.task_environment.desired_count, maximumPercent=service.task_environment.maximum_percent, minimumHealthyPercent=service.task_environment.minimum_healthy_percent, distinctInstance=service.task_environment.distinct_instance)
+        service.original_running_count = (response.get('services')[0]).get('runningCount')
+        service.original_desired_count = (response.get('services')[0]).get('desiredCount')
+        service.desired_count = service.original_desired_count
+
+    def update_service(self, service):
+        desiredCount = service.task_environment.desired_count
+        # サービスのタスク数が0だったらそれを維持する
+        if self.is_service_zero_keep and service.original_desired_count == 0:
+            desiredCount = 0
+        response = self.awsutils.update_service(cluster=service.task_environment.cluster_name, service=service.service_name, taskDefinition=service.task_definition_arn, maximumPercent=service.task_environment.maximum_percent, minimumHealthyPercent=service.task_environment.minimum_healthy_percent, desiredCount=desiredCount)
+        service.running_count = response.get('services')[0].get('runningCount')
+        service.desired_count = response.get('services')[0].get('desiredCount')
 
 
 class ServiceManager(object):
