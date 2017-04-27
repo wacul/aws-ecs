@@ -52,8 +52,8 @@ class RunTask(object):
             if task.get('lastStatus') == 'STOPPED':
                 break
             retry_count = retry_count - 1
-            if retry_count == 0:
-                raise Exception('Task %s timed out' % (task.get('arn')))
+            if retry_count <= 0:
+                raise Exception('Task timed out')
             time.sleep(check_interval)
         container = task.get('containers')[0]
         exitCode = container.get('exitCode')
