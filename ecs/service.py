@@ -44,15 +44,12 @@ class ServiceProcess(Thread):
 
         elif mode == ProcessMode.checkService:
             self.check_service(service)
-            success("Checking service '%s' succeeded (%d tasks running)" % (service.service_name, service.original_running_count))
 
         elif mode == ProcessMode.createService:
             self.create_service(service)
-            success("Create service '%s' succeeded (%d tasks running)" % (service.service_name, service.original_running_count))
 
         elif mode == ProcessMode.updateService:
             self.update_service(service)
-            success("Update service '%s' with task definition '%s' succeeded" % (service.service_name, service.task_definition_arn))
 
         elif mode == ProcessMode.waitForStable:
             EcsUtils.wait_for_stable(self.awsutils, service)
@@ -74,13 +71,14 @@ class ServiceProcess(Thread):
         service.original_desired_count = (response.get('services')[0]).get('desiredCount')
         service.desired_count = service.original_desired_count
         service.service_exists = True
+        success("Checking service '%s' succeeded (%d tasks running)" % (service.service_name, service.original_running_count))
 
-    @staticmethod
     def create_service(self, service):
         response = self.awsutils.create_service(cluster=service.task_environment.cluster_name, service=service.service_name, taskDefinition=service.task_definition_arn, desiredCount=service.task_environment.desired_count, maximumPercent=service.task_environment.maximum_percent, minimumHealthyPercent=service.task_environment.minimum_healthy_percent, distinctInstance=service.task_environment.distinct_instance)
         service.original_running_count = (response.get('services')[0]).get('runningCount')
         service.original_desired_count = (response.get('services')[0]).get('desiredCount')
         service.desired_count = service.original_desired_count
+        success("Create service '%s' succeeded (%d tasks running)" % (service.service_name, service.original_running_count))
 
     def update_service(self, service):
         desiredCount = service.task_environment.desired_count
@@ -90,6 +88,7 @@ class ServiceProcess(Thread):
         response = self.awsutils.update_service(cluster=service.task_environment.cluster_name, service=service.service_name, taskDefinition=service.task_definition_arn, maximumPercent=service.task_environment.maximum_percent, minimumHealthyPercent=service.task_environment.minimum_healthy_percent, desiredCount=desiredCount)
         service.running_count = response.get('services')[0].get('runningCount')
         service.desired_count = response.get('services')[0].get('desiredCount')
+        success("Update service '%s' with task definition '%s' succeeded" % (service.service_name, service.task_definition_arn))
 
 
 class ServiceManager(object):
