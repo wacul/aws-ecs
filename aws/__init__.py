@@ -115,9 +115,6 @@ class AwsUtils(object):
         if failures:
             raise Exception("Service '%s' is %s in cluster '%s'" % (service, failures[0].get('reason'), cluster))
 
-        # Waiting for the service update is done
-        waiter = self.client.get_waiter('services_stable')
-        waiter.wait(cluster=cluster, services=[service])
         return self.describe_service(cluster=cluster, service=service)
 
     def register_task_definition(self, task_definition):
