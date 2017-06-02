@@ -64,17 +64,13 @@ def parse_env(data_string):
     return data
 
 
-def load_json(config_json_file):
-    if os.path.isfile(config_json_file):
-        with open(config_json_file, 'r') as config_json_data:
-            return json.load(config_json_data)
-
-def render_definition(template_dir, template_file, config_json, is_env):
+def render_template(template, config, is_env):
     context = {}
-    context.update(config_json)
+    context.update(config)
     if is_env:
         context.update(parse_env(os.environ))
 
-    # Render
-    render_definition = render_template(os.getcwd(), os.path.join(template_dir, template_file), context)
-    return json.loads(render_definition)
+    # raises errors for undefined variables
+    env = jinja2.Environment(undefined=jinja2.StrictUndefined)
+    rendered = env.from_string(template).render(context)
+    return rendered

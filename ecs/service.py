@@ -59,24 +59,32 @@ class ServiceProcess(Thread):
 
     def check_service(self, service):
         try:
-            response = self.awsutils.describe_service(service.task_environment.cluster_name, service.service_name)
+            res_service = self.awsutils.describe_service(service.task_environment.cluster_name, service.service_name)
         except ServiceNotFoundException:
-            error("Service '%s' not Found." % (service.service_name))
+            error("Service '%s' not Found. will be created." % (service.service_name))
             return
-        if response['services'][0]['status'] == 'INACTIVE':
-            error("Service '%s' status is INACTIVE." % (service.service_name))
+            
+        if res_service['status'] == 'INACTIVE':
+            error("Service '%s' status is INACTIVE. will be recreated." % (service.service_name))
             return
-        service.original_task_definition = (response.get('services')[0]).get('taskDefinition')
-        service.original_running_count = (response.get('services')[0]).get('runningCount')
-        service.original_desired_count = (response.get('services')[0]).get('desiredCount')
+        if res_service['status'] == 'DRAINING':
+            error("Service '%s' status is DRAINING. will be recreated." % (service.service_name))
+            return
+        service.original_task_definition_arn = res_service.get('taskDefinition')
+        service.original_running_count = res_service.get('runningCount')
+        service.original_desired_count = res_service.get('desiredCount')
         service.desired_count = service.original_desired_count
         service.service_exists = True
+
+        original_task_definition = self.awsutils.describe_task_definition(service.original_task_definition_arn)
+        checks = EcsUtils.check_container_definition(original_task_definition['containerDefinitions'], service.task_definition['containerDefinitions'])
         success("Checking service '%s' succeeded (%d tasks running)" % (service.service_name, service.original_running_count))
+        info(checks)
 
     def create_service(self, service):
-        response = self.awsutils.create_service(cluster=service.task_environment.cluster_name, service=service.service_name, taskDefinition=service.task_definition_arn, desiredCount=service.task_environment.desired_count, maximumPercent=service.task_environment.maximum_percent, minimumHealthyPercent=service.task_environment.minimum_healthy_percent, distinctInstance=service.task_environment.distinct_instance)
-        service.original_running_count = (response.get('services')[0]).get('runningCount')
-        service.original_desired_count = (response.get('services')[0]).get('desiredCount')
+        res_service = self.awsutils.create_service(cluster=service.task_environment.cluster_name, service=service.service_name, taskDefinition=service.task_definition_arn, desiredCount=service.task_environment.desired_count, maximumPercent=service.task_environment.maximum_percent, minimumHealthyPercent=service.task_environment.minimum_healthy_percent, distinctInstance=service.task_environment.distinct_instance)
+        service.original_running_count = res_service.get('runningCount')
+        service.original_desired_count = res_service.get('desiredCount')
         service.desired_count = service.original_desired_count
         success("Create service '%s' succeeded (%d tasks running)" % (service.service_name, service.original_running_count))
 
@@ -85,18 +93,24 @@ class ServiceProcess(Thread):
         # サービスのタスク数が0だったらそれを維持する
         if self.is_service_zero_keep and service.original_desired_count == 0:
             desiredCount = 0
-        response = self.awsutils.update_service(cluster=service.task_environment.cluster_name, service=service.service_name, taskDefinition=service.task_definition_arn, maximumPercent=service.task_environment.maximum_percent, minimumHealthyPercent=service.task_environment.minimum_healthy_percent, desiredCount=desiredCount)
-        service.running_count = response.get('services')[0].get('runningCount')
-        service.desired_count = response.get('services')[0].get('desiredCount')
+        res_service = self.awsutils.update_service(cluster=service.task_environment.cluster_name, service=service.service_name, taskDefinition=service.task_definition_arn, maximumPercent=service.task_environment.maximum_percent, minimumHealthyPercent=service.task_environment.minimum_healthy_percent, desiredCount=desiredCount)
+        service.running_count = res_service.get('runningCount')
+        service.desired_count = res_service.get('desiredCount')
         success("Update service '%s' with task definition '%s' succeeded" % (service.service_name, service.task_definition_arn))
 
 
 class ServiceManager(object):
     def __init__(self, args):
+        self.awsutils = AwsUtils(access_key=args.key, secret_key=args.secret, region=args.region)
         self.task_queue = Queue()
 
-        task_definition_config_json = render.load_json(args.task_definition_config_json)
-        self.service_list, self.deploy_service_list =  Service.get_service_list(args.task_definition_template_dir, task_definition_config_json, args.task_definition_config_env, args.deploy_service_group, args.template_group)
+        self.service_list, self.deploy_service_list, self.environment = Service.get_service_list(services_yaml=args.services_yaml,
+                                                                                                 environment_yaml=args.environment_yaml,
+                                                                                                 task_definition_template_dir=args.task_definition_template_dir,
+                                                                                                 task_definition_config_json=args.task_definition_config_json,
+                                                                                                 task_definition_config_env=args.task_definition_config_env,
+                                                                                                 deploy_service_group=args.deploy_service_group,
+                                                                                                 template_group=args.template_group)
 
         threads_count = args.threads_count
         # thread数がタスクの数を超えているなら減らす
@@ -108,9 +122,7 @@ class ServiceManager(object):
             thread.setDaemon(True)
             thread.start()
 
-        self.awsutils = AwsUtils(access_key=args.key, secret_key=args.secret, region=args.region)
         self.is_service_zero_keep = args.service_zero_keep
-        self.environment = task_definition_config_json['environment']
         self.template_group = args.template_group
         self.is_delete_unused_service = args.delete_unused_service
 
@@ -139,8 +151,21 @@ class ServiceManager(object):
 
         self.result_check()
 
-    def delete_unused_services(self):
-        h1("Step: Delete Unused Service")
+    def dry_run(self):
+        # Step: Check ECS cluster
+        self.check_ecs_cluster()
+
+        # Step: Check Delete Service
+        self.delete_unused_services(dry_run=True)
+
+        # Step: Check Service
+        self.check_service()
+
+    def delete_unused_services(self, dry_run=False):
+        if dry_run:
+            h1("Step: Check Delete Unused Service")
+        else:
+            h1("Step: Delete Unused Service")
         if not self.is_delete_unused_service:
             info("Do not delete unused service")
             return
@@ -148,15 +173,8 @@ class ServiceManager(object):
         cluster_services = {}
         for cluster_name in self.cluster_list:
             running_service_arn_list = self.awsutils.list_services(cluster_name)
-            response = self.awsutils.describe_services(cluster_name, running_service_arn_list)
-            failures = response.get('failures')
-
-            # リストからサービス詳細が取れなければエラーにしてしまう
-            if len(failures) > 0:
-                for failure in failures:
-                    error("list service failer. service: '%s', reason: '%s'" % (failure.get('arn'), failure.get('reason')))
-                sys.exit(1)
-            cluster_services[cluster_name] = response['services']
+            services = self.awsutils.describe_services(cluster_name, running_service_arn_list)
+            cluster_services[cluster_name] = services
 
         task_definition_names = []
         task_dict = {}
@@ -165,16 +183,10 @@ class ServiceManager(object):
                 service_name = service_description['serviceName']
 
                 task_definition_name = service_description['taskDefinition']
-                response = self.awsutils.describe_task_definition(task_definition_name)
-                response_task_environment = response['taskDefinition']['containerDefinitions'][0]['environment']
+                response_task_definition = self.awsutils.describe_task_definition(task_definition_name)
 
-                # 環境変数なし
-                if len(response_task_environment) <= 0:
-                    error("Service '%s' is environment value not found" % (service_name))
-                    self.error = True
-                    continue
                 try:
-                    task_environment = TaskEnvironment(response_task_environment)
+                    task_environment = TaskEnvironment(response_task_definition)
                 # 環境変数の値が足りない 
                 except EnvironmentValueNotFoundException:
                     error("Service '%s' is lack of environment value" % (service_name))
@@ -196,8 +208,9 @@ class ServiceManager(object):
                 ident_service_list = [ service for service in self.service_list if service.service_name == service_name and service.task_environment.cluster_name == cluster_name ]
 
                 if len(ident_service_list) <= 0:
-                    success("Delete service '%s' for service template deleted" % (service_name))
-                    self.awsutils.delete_service(cluster_name, service_name)
+                    success("Delete service '%s'" % (service_name))
+                    if not dry_run:
+                        self.awsutils.delete_service(cluster_name, service_name)
 
     def check_ecs_cluster(self):
         h1("Step: Check ECS cluster")
@@ -212,7 +225,7 @@ class ServiceManager(object):
         self.task_queue.join()
 
     def check_service(self):
-        h1("Step: Check ECS Service")
+        h1("Step: Check Deploy ECS Service")
         for service in self.deploy_service_list:
             self.task_queue.put([service, ProcessMode.checkService])
         self.task_queue.join()

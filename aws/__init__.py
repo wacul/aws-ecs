@@ -1,9 +1,9 @@
 # coding: utf-8
 from boto3 import Session
+from botocore.exceptions import WaiterError, ClientError
 
 class ServiceNotFoundException(Exception):
-    def __str__(self):
-        return repr(self.value)
+    pass
 
 class AwsUtils(object):
     def __init__(self, access_key, secret_key, region='us-east-1'):
@@ -23,8 +23,12 @@ class AwsUtils(object):
             raise Exception("Cluster '%s' is %s" % (cluster, failures[0].get('reason')))
         return response
 
-    def describe_task_definition(self, taskDefinition):
-        return self.client.describe_task_definition(taskDefinition=taskDefinition)
+    def describe_task_definition(self, name):
+        try:
+            response = self.client.describe_task_definition(taskDefinition=name)
+        except ClientError as e:
+            return None
+        return response.get('taskDefinition')
 
     def delete_service(self, cluster, service_name):
         self.client.update_service(cluster=cluster, service=service_name, desiredCount=0)
@@ -52,7 +56,13 @@ class AwsUtils(object):
         failures = response.get('failures')
         if failures:
             raise ServiceNotFoundException("Service '%s' is %s in cluster '%s'" % (service, failures[0].get('reason'), cluster))
-        return response
+        res_services = response['services']
+        # 複数同名のサービスが見つかったら、ACTIVEを返しておく
+        if len(res_services) > 1:
+            for res_s in res_services:
+                if res_s.get['status'] == 'ACTIVE':
+                    return res_s
+        return res_services[0]
 
     def describe_services(self, cluster, service_list):
         """
@@ -70,7 +80,35 @@ class AwsUtils(object):
                 result['failures'].extend(response['failures'])
             
             service_list = service_list[10:]
-        return result
+
+            failures = response.get('failures')
+
+        # リストからサービス詳細が取れなければエラーにしてしまう
+        if len(failures) > 0:
+            message = "describe_service failure."
+            for failure in failures:
+                message = message + "\nservice: %s, reson: %s" % (failure.get('arn'), failure.get('reason'))
+            raise ServiceNotFoundException("message")
+        services = result.get('services')
+
+        # 重複チェック
+        t = set()
+        dup_service_names = [x for x in services if x["serviceName"] in t or t.add(x["serviceName"])]
+        dup_services = []
+        for d in dup_service_names:
+            dup_services.extend([x for x in services if x["serviceName"] == d])
+        if len(dup_services) > 0:
+            # 重複があれば一旦リストから外す
+            services = list(filter(lambda x: x["serviceName"] == d, services))
+
+            # 重複したものがあればACTIVEのみ取り出す。どちらも違うなら取得順
+            active_dup_services = [x for x in dup_services if x["status"] == 'ACTIVE']
+            inactive_dup_services = [x for x in dup_services if x["status"] != 'ACTIVE']
+            if len(active_services) > 1:
+                services.append(active_service[0])
+            else:
+                services.append(inactive_service[0])
+        return services
 
     def create_service(self, cluster, service, taskDefinition, desiredCount, maximumPercent, minimumHealthyPercent, distinctInstance):
         """

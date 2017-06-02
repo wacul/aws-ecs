@@ -4,8 +4,6 @@ import render
 from aws import AwsUtils
 from ecs.classes import EcsUtils
 
-logging.basicConfig(stream=sys.stdout, level=logging.INFO, format='%(message)s')
-logging.getLogger("botocore").setLevel(logging.WARNING)
 logger = logging.getLogger(__name__)
 
 class RunTask(object):
@@ -31,12 +29,12 @@ class RunTask(object):
         self.wait_for_task(task_arn)
 
     def register_task_definition(self):
-        latest_task_definition = EcsUtils.check_task_definition(self.awsutils, self.family)
+        latest_task_definition = self.awsutils.describe_task_definition(self.family)
         if not latest_task_definition:
             logger.info("Task Definition not found. Register new one.")
             task_definition_arn = EcsUtils.register_task_definition(self.awsutils, self.task_definition)
         else:
-            if EcsUtils.is_same_task_definition(self.task_definition, latest_task_definition):
+            if EcsUtils.is_same_container_definition(self.task_definition['containerDefinitions'], latest_task_definition['containerDefinitions']):
                 logger.info("Task Definition is not changed.")
                 task_definition_arn = latest_task_definition.get('taskDefinitionArn')
             else:
