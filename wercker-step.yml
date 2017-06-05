@@ -1,11 +1,11 @@
 name: aws-ecs
-version: 0.7.3
+version: 1.0.0
 description: Deploy service to ECS
 keywords:
   - aws
   - ecs
 properties:
-  # Step 1: Configuring AWS
+  # Configuring AWS
   key:
     type: string
     required: true
@@ -16,16 +16,31 @@ properties:
     type: string
     required: false
 
-  # Step 2: Defining task definition
+  # Defining task definition
   task-definition-template-dir:
     type: string
-    required: true
+    required: false
   task-definition-json:
     type: string
-    required: true
+    required: false
+  service-yaml:
+    type: string
+    required: false
+  environment-yaml:
+    type: string
+    required: false
   task-definition-env:
     type: bool
     default: true
+    required: false
+
+  # Test
+  test-tempates:
+    type: bool
+    default: false
+    required: false
+  environment-yaml-dir:
+    type: string
     required: false
 
   # Step 3: optional

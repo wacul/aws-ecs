@@ -55,19 +55,36 @@ if [ -z "$WERCKER_AWS_ECS_SECRET" ]; then
   exit 1
 fi
 
-if [ -z "$WERCKER_AWS_ECS_TASK_DEFINITION_TEMPLATE_DIR" ]; then
-  error "Please set the 'task-definition-template-dir' variable"
-  exit 1
+if [ ! -z "$WERCKER_AWS_ECS_SERVICES_YAML" ]; then
+  if [ "$WERCKER_AWS_ECS_TEST_TEMPLATES" == 'true' ]; then
+    if [ -z "$WERCKER_AWS_ECS_ENVIRONMENT_YAML_DIR"]; then
+      error "Please set the '--environment-yaml-dir' variable"
+      exit 1
+    fi
+    TASK_DEFINITION="--services-yaml $WERCKER_AWS_ECS_SERVICES_YAML --environment-yaml-dir $WERCKER_AWS_ECS_ENVIRONMENT_YAML_DIR"
+  else 
+    if [ -z "$WERCKER_AWS_ECS_ENVIRONMENT_YAML"]; then
+      error "Please set the '--environment-yaml' variable"
+      exit 1
+    fi
+    TASK_DEFINITION="--services-yaml $WERCKER_AWS_ECS_SERVICES_YAML --environment-yaml $WERCKER_AWS_ECS_ENVIRONMENT_YAML"
+  fi
+else
+  if [ -z "$WERCKER_AWS_ECS_TASK_DEFINITION_TEMPLATE_DIR" ]; then
+    error "Please set the '--services-yaml or --task-definition-config-json' variable"
+    exit 1
+  fi
+  if [ -z "$WERCKER_AWS_ECS_TASK_DEFINITION_CONFIG_JSON" ]; then
+    error "Please set the '--task-definition-config-json' variable"
+    exit 1
+  fi
+  TASK_DEFINITION="--task-definition-template-dir $WERCKER_AWS_ECS_TASK_DEFINITION_TEMPLATE_DIR --task-definition-config-json $WERCKER_AWS_ECS_TASK_DEFINITION_CONFIG_JSON"
 fi
 
 if [ ! -z "$WERCKER_AWS_ECS_TEMPLATE_GROUP" ]; then
   TEMPLATE_GROUP="--template-group $WERCKER_AWS_ECS_TEMPLATE_GROUP"
 fi
 
-if [ -z "$WERCKER_AWS_ECS_TASK_DEFINITION_CONFIG_JSON" ]; then
-  error "Please set the 'task-definition-config-json' variable"
-  exit 1
-fi
 
 if [ "$WERCKER_AWS_ECS_TASK_DEFINITION_CONFIG_ENV" == 'false' ]; then
   TASK_DEFINITION_CONFIG_ENV='--no-task-definition-config-env'
@@ -86,15 +103,21 @@ if [ ! -z "$WERCKER_AWS_ECS_THREADS_COUNT" ]; then
 fi
 
 
-python3 "$WERCKER_STEP_ROOT/main.py" \
-    --key "$WERCKER_AWS_ECS_KEY" \
-    --secret "$WERCKER_AWS_ECS_SECRET" \
-    --region "${WERCKER_AWS_ECS_REGION:-us-east-1}" \
-    --task-definition-template-dir "$WERCKER_AWS_ECS_TASK_DEFINITION_TEMPLATE_DIR" \
-    $TEMPLATE_GROUP \
-    $NO_TASK_DEFINITION_CONFIG_ENV \
-    $NO_DELETE_UNUSED_SERVICE \
-    $SERVICE_ZERO_KEEP \
-    $DEPLOY_SERVICE_GROUP \
-    $THREADS_COUNT \
-    --task-definition-config-json "$WERCKER_AWS_ECS_TASK_DEFINITION_CONFIG_JSON"
+
+
+if [ "$WERCKER_AWS_ECS_TEST_TEMPLATES" == 'true' ]; then
+    python3 "$WERCKER_STEP_ROOT/main.py" test-templates \
+        $TASK_DEFINITION
+else
+    python3 "$WERCKER_STEP_ROOT/main.py" service \
+        --key "$WERCKER_AWS_ECS_KEY" \
+        --secret "$WERCKER_AWS_ECS_SECRET" \
+        --region "${WERCKER_AWS_ECS_REGION:-us-east-1}" \
+        $TEMPLATE_GROUP \
+        $NO_TASK_DEFINITION_CONFIG_ENV \
+        $NO_DELETE_UNUSED_SERVICE \
+        $SERVICE_ZERO_KEEP \
+        $DEPLOY_SERVICE_GROUP \
+        $THREADS_COUNT \
+        $TASK_DEFINITION
+fi
