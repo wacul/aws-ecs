@@ -1,5 +1,5 @@
 name: aws-ecs
-version: 1.0.0
+version: 1.0.1
 description: Deploy service to ECS
 keywords:
   - aws
@@ -23,7 +23,7 @@ properties:
   task-definition-json:
     type: string
     required: false
-  service-yaml:
+  services-yaml:
     type: string
     required: false
   environment-yaml:
