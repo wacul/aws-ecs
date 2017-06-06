@@ -162,13 +162,13 @@ class ServiceManager(object):
         self.check_service()
 
     def delete_unused_services(self, dry_run=False):
+        if not self.is_delete_unused_service:
+            info("Do not delete unused service")
+            return
         if dry_run:
             h1("Step: Check Delete Unused Service")
         else:
             h1("Step: Delete Unused Service")
-        if not self.is_delete_unused_service:
-            info("Do not delete unused service")
-            return
 
         cluster_services = {}
         for cluster_name in self.cluster_list:
