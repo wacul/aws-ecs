@@ -112,16 +112,14 @@ class ServiceManager(object):
                                                                                                  deploy_service_group=args.deploy_service_group,
                                                                                                  template_group=args.template_group)
 
-        threads_count = args.threads_count
+        self.threads_count = args.threads_count
         # thread数がタスクの数を超えているなら減らす
-        if len(self.deploy_service_list) < threads_count:
-           threads_count = len(self.deploy_service_list)
-        # threadの開始
-        for i in range(threads_count):
-            thread = ServiceProcess(self.task_queue, args.key, args.secret, args.region, args.service_zero_keep)
-            thread.setDaemon(True)
-            thread.start()
+        if len(self.deploy_service_list) < self.threads_count:
+           self.threads_count = len(self.deploy_service_list)
 
+        self.key = args.key
+        self.secret = args.secret
+        self.region = args.region
         self.is_service_zero_keep = args.service_zero_keep
         self.template_group = args.template_group
         self.is_delete_unused_service = args.delete_unused_service
@@ -133,12 +131,21 @@ class ServiceManager(object):
 
         self.error = False
 
+    def start_threads(self):
+        # threadの開始
+        for i in range(self.threads_count):
+            thread = ServiceProcess(self.task_queue, self.key, self.secret, self.region, self.is_service_zero_keep)
+            thread.setDaemon(True)
+            thread.start()
+
     def run(self):
         # Step: Check ECS cluster
         self.check_ecs_cluster()
 
         # Step: Delete Unused Service
         self.delete_unused_services()
+
+        self.start_threads()
 
         # Step: Register New Task Definition
         self.register_new_task_definition()
@@ -158,6 +165,8 @@ class ServiceManager(object):
         # Step: Check Delete Service
         self.delete_unused_services(dry_run=True)
 
+        self.start_threads()
+
         # Step: Check Service
         self.check_service()
 
@@ -170,16 +179,11 @@ class ServiceManager(object):
         else:
             h1("Step: Delete Unused Service")
 
-        cluster_services = {}
         for cluster_name in self.cluster_list:
             running_service_arn_list = self.awsutils.list_services(cluster_name)
             services = self.awsutils.describe_services(cluster_name, running_service_arn_list)
-            cluster_services[cluster_name] = services
 
-        task_definition_names = []
-        task_dict = {}
-        for cluster_name, d in cluster_services.items():
-            for service_description in d:
+            for service_description in services:
                 service_name = service_description['serviceName']
 
                 task_definition_name = service_description['taskDefinition']

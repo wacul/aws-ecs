@@ -153,18 +153,18 @@ class Service(object):
             # parameter check & build docker environment
             env = []
 
-            taskDefinitionTemplate = service_config.get("taskDefinitionTemplate")
-            if taskDefinitionTemplate is None:
-                raise ParameterNotFoundException("Service `%s` requires parameter `taskDefinitionTemplate`" % (service_name))
-
             environment = environment_config.get("environment")
             if environment is None:
                 raise VariableNotFoundException("environment-yaml requires paramter `environment`.")
+            environment = render.render_template(str(environment), variables, task_definition_config_env)
             env.append({"name": "ENVIRONMENT", "value": environment})
 
             registrator = service_config.get("registrator")
-            if registrator:
-                if not isinstance(registrator, bool):
+            if registrator is not None:
+                registrator = render.render_template(str(registrator), variables, task_definition_config_env)
+                try:
+                    registrator = strtobool(registrator)
+                except ValueError:
                     raise ParameterInvalidException("Service `%s` parameter `registrator` must be bool" % (service_name))
                 if registrator:
                     env.append({"name": "SERVICE_NAME", "value": environment})
@@ -173,44 +173,67 @@ class Service(object):
             cluster = service_config.get("cluster")
             if cluster is None:
                 raise ParameterNotFoundException("Service `%s` requires parameter `cluster`" % (service_name))
+            cluster = render.render_template(str(cluster), variables, task_definition_config_env)
             env.append({"name": "CLUSTER_NAME", "value": cluster})
             
             serviceGroup = service_config.get("serviceGroup")
-            if serviceGroup:
+            if serviceGroup is not None:
+                serviceGroup = render.render_template(str(serviceGroup), variables, task_definition_config_env)
                 env.append({"name": "SERVICE_GROUP", "value": serviceGroup})
 
             templateGroup = service_config.get("templateGroup")
-            if templateGroup:
+            if templateGroup is not None:
+                templateGroup = render.render_template(str(templateGroup), variables, task_definition_config_env)
                 env.append({"name": "TEMPLATE_GROUP", "value": templateGroup})
 
+           
             desiredCount = service_config.get("desiredCount")
             if desiredCount is None:
                 raise ParameterNotFoundException("Service `%s` requires parameter `desiredCount`" % (service_name))
-            if not isinstance(desiredCount, int):
+            desiredCount = render.render_template(str(desiredCount), variables, task_definition_config_env)
+            try:
+                int(desiredCount)
+            except ValueError:
                 raise ParameterInvalidException("Service `%s` parameter `desiredCount` is int" % (service_name))
-            env.append({"name": "DESIRED_COUNT", "value": str(desiredCount)})
+            env.append({"name": "DESIRED_COUNT", "value": desiredCount})
 
             minimumHealthyPercent = service_config.get("minimumHealthyPercent")
-            if minimumHealthyPercent:
-                if not isinstance(minimumHealthyPercent, int):
+            if minimumHealthyPercent is not None:
+                minimumHealthyPercent = render.render_template(str(minimumHealthyPercent), variables, task_definition_config_env)
+                try:
+                    int(minimumHealthyPercent)
+                except ValueError:
                     raise ParameterInvalidException("Service `%s` parameter `minimumHealthyPercent` is int" % (service_name))
-                env.append({"name": "MINIMUM_HEALTHY_PERCENT", "value": str(minimumHealthyPercent)})
+                env.append({"name": "MINIMUM_HEALTHY_PERCENT", "value": minimumHealthyPercent})
 
             maximumPercent = service_config.get("maximumPercent")
-            if maximumPercent:
-                if not isinstance(maximumPercent, int):
+            if maximumPercent is not None:
+                maximumPercent = render.render_template(str(maximumPercent), variables, task_definition_config_env)
+                try:
+                    int(maximumPercent)
+                except ValueError:
                     raise ParameterInvalidException("Service `%s` parameter `maximumPercent` is int" % (service_name))
                 env.append({"name": "MAXIMUM_PERCENT", "value": str(maximumPercent)})
 
             distinctInstance = service_config.get("distinctInstance")
-            if distinctInstance:
-                if not isinstance(distinctInstance, bool):
+            if distinctInstance is not None:
+                distinctInstance = render.render_template(str(distinctInstance), variables, task_definition_config_env)
+                try:
+                    distinctInstance = strtobool(distinctInstance)
+                except ValueError:
                     raise ParameterInvalidException("Service `%s` parameter `distinctInstance` must be bool" % (service_name))
-                env.append({"name": "DISTINCT_INSTANCE", "value": "true"})
+                if distinctInstance:
+                    env.append({"name": "DISTINCT_INSTANCE", "value": "true"})
 
+            taskDefinitionTemplate = service_config.get("taskDefinitionTemplate")
+            if taskDefinitionTemplate is None:
+                raise ParameterNotFoundException("Service `%s` requires parameter `taskDefinitionTemplate`" % (service_name))
             service_task_definition_template = task_definition_template_dict.get(taskDefinitionTemplate)
             if service_task_definition_template is None or len(service_task_definition_template) == 0:
-                raise Exception("'%s' taskDefinitionTemplate not found. " % service)
+                raise Exception("'%s' taskDefinitionTemplate not found. " % service_name)
+            if not isinstance(service_task_definition_template, str):
+                raise Exception("'%s' taskDefinitionTemplate specified template value must be str. " % service_name)
+
             try:
                 task_definition_data = render.render_template(service_task_definition_template, variables, task_definition_config_env)
             except jinja2.exceptions.UndefinedError as e:
