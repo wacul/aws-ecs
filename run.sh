@@ -45,16 +45,6 @@ if [ $? -ne 0 ]; then
 fi
 
 # Check variables
-if [ -z "$WERCKER_AWS_ECS_KEY" ]; then
-  error "Please set the 'key' variable"
-  exit 1
-fi
-
-if [ -z "$WERCKER_AWS_ECS_SECRET" ]; then
-  error "Please set the 'secret' variable"
-  exit 1
-fi
-
 if [ ! -z "$WERCKER_AWS_ECS_SERVICES_YAML" ]; then
   if [ "$WERCKER_AWS_ECS_TEST_TEMPLATES" == 'true' ]; then
     if [ -z "$WERCKER_AWS_ECS_ENVIRONMENT_YAML_DIR"]; then

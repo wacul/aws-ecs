@@ -1,5 +1,5 @@
 name: aws-ecs
-version: 1.0.3
+version: 1.0.4
 description: Deploy service to ECS
 keywords:
   - aws
@@ -8,10 +8,10 @@ properties:
   # Configuring AWS
   key:
     type: string
-    required: true
+    required: false
   secret:
     type: string
-    required: true
+    required: false
   region:
     type: string
     required: false
