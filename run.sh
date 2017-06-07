@@ -47,13 +47,13 @@ fi
 # Check variables
 if [ ! -z "$WERCKER_AWS_ECS_SERVICES_YAML" ]; then
   if [ "$WERCKER_AWS_ECS_TEST_TEMPLATES" == 'true' ]; then
-    if [ -z "$WERCKER_AWS_ECS_ENVIRONMENT_YAML_DIR"]; then
+    if [ -z "$WERCKER_AWS_ECS_ENVIRONMENT_YAML_DIR" ]; then
       error "Please set the '--environment-yaml-dir' variable"
       exit 1
     fi
     TASK_DEFINITION="--services-yaml $WERCKER_AWS_ECS_SERVICES_YAML --environment-yaml-dir $WERCKER_AWS_ECS_ENVIRONMENT_YAML_DIR"
   else 
-    if [ -z "$WERCKER_AWS_ECS_ENVIRONMENT_YAML"]; then
+    if [ -z "$WERCKER_AWS_ECS_ENVIRONMENT_YAML" ]; then
       error "Please set the '--environment-yaml' variable"
       exit 1
     fi
