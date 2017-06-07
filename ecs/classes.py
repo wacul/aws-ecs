@@ -128,19 +128,33 @@ class Service(object):
 
 
     @staticmethod
-    def get_service_list(services_yaml, environment_yaml, task_definition_template_dir, task_definition_config_json, task_definition_config_env, deploy_service_group, template_group):
+    def get_service_list(services_yaml, environment_yaml, task_definition_template_dir, task_definition_config_json, task_definition_config_env, deploy_service_group, template_group, environment_yaml_dir=None):
         h1("Step: Check ECS Template")
-        if services_yaml is not None:
-            service_list, deploy_service_list, environment =  Service._get_service_list_yaml(services_yaml, environment_yaml, task_definition_config_env, deploy_service_group, template_group)
+
+        if services_yaml:
+            services_config = yaml.load(services_yaml)
+            if environment_yaml_dir:
+                files = os.listdir(environment_yaml_dir)
+                if files is None or len(files) == 0:
+                    raise Exception("environment yaml file not found.")
+                for f in files:
+                    file_path = os.path.join(environment_yaml_dir, f)
+                    if os.path.isfile(file_path):
+                        with open(file_path, 'r') as environment_yaml:
+                            environment_config = yaml.load(environment_yaml)
+                            service_list, deploy_service_list, environment =  Service._get_service_list_yaml(services_config, environment_config, task_definition_config_env, deploy_service_group, template_group)
+                    success("Template check environment `%s` done." % environment)
+            else:
+                environment_config = yaml.load(environment_yaml)
+                service_list, deploy_service_list, environment =  Service._get_service_list_yaml(services_config, environment_config, task_definition_config_env, deploy_service_group, template_group)
+                success("Template check environment `%s` done." % environment)
         else:
             service_list, deploy_service_list, environment =  Service._get_service_list_json(task_definition_template_dir, task_definition_config_json, task_definition_config_env, deploy_service_group, template_group)
-        success("Template check done")
+            success("Template check environment `%s` done." % environment)
         return service_list, deploy_service_list, environment
 
     @staticmethod
-    def _get_service_list_yaml(services_yaml, environment_yaml, task_definition_config_env, deploy_service_group, template_group):
-        services_config = yaml.load(services_yaml)
-        environment_config = yaml.load(environment_yaml)
+    def _get_service_list_yaml(services_config, environment_config, task_definition_config_env, deploy_service_group, template_group):
 
         services = services_config["services"]
         task_definition_template_dict = services_config["taskDefinitionTemplates"]
@@ -356,32 +370,6 @@ class EcsUtils(object):
         else:
             t = diff(ad, bd)
             return "    - Container is changed. Diff:\n%s" % (t)
-
-    @staticmethod
-    def test_templates(args):
-        if args.services_yaml:
-            files = os.listdir(args.environment_yaml_dir)
-            if files is None or len(files) == 0:
-                raise Exception("environment yaml file not found.")
-            for f in files:
-                file_path = os.path.join(args.environment_yaml_dir, f)
-                if os.path.isfile(file_path):
-                    with open(file_path, 'r') as environment_yaml:
-                        Service.get_service_list(services_yaml=args.services_yaml,
-                                             environment_yaml=environment_yaml,
-                                             task_definition_template_dir=args.task_definition_template_dir,
-                                             task_definition_config_json=args.task_definition_config_json,
-                                             task_definition_config_env=args.task_definition_config_env,
-                                             deploy_service_group=None,
-                                             template_group=None)
-        else:
-            Service.get_service_list(services_yaml=None,
-                                     environment_yaml=None,
-                                     task_definition_template_dir=args.task_definition_template_dir,
-                                     task_definition_config_json=args.task_definition_config_json,
-                                     task_definition_config_env=args.task_definition_config_env,
-                                     deploy_service_group=None,
-                                     template_group=None)
 
 def is_same_container_definition(a, b):
     if not len(a) == len(b):

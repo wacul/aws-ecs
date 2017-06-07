@@ -5,7 +5,7 @@ import argparse
 import traceback
 from ecs.service import ServiceManager
 from ecs.runtask import RunTask
-from ecs.classes import EcsUtils
+from ecs.classes import Service
 
 logging.basicConfig(stream=sys.stdout, level=logging.INFO, format='%(levelname)s: %(message)s')
 logging.getLogger("botocore").setLevel(logging.WARNING)
@@ -86,7 +86,14 @@ if __name__ == '__main__':
         run_task = RunTask(args)
         run_task.run()
     elif args.command == 'test-templates':
-        EcsUtils.test_templates(args)
+        Service.get_service_list(services_yaml=args.services_yaml,
+                                 environment_yaml=None,
+                                 task_definition_template_dir=args.task_definition_template_dir,
+                                 task_definition_config_json=args.task_definition_config_json,
+                                 task_definition_config_env=args.task_definition_config_env,
+                                 deploy_service_group=None,
+                                 template_group=None,
+                                 environment_yaml_dir=args.environment_yaml_dir)
     else:
         service_manager = ServiceManager(args)
         if args.test:
