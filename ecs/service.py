@@ -78,8 +78,7 @@ class ServiceProcess(Thread):
 
         original_task_definition = self.awsutils.describe_task_definition(service.original_task_definition_arn)
         checks = EcsUtils.check_container_definition(original_task_definition['containerDefinitions'], service.task_definition['containerDefinitions'])
-        success("Checking service '%s' succeeded (%d tasks running)" % (service.service_name, service.original_running_count))
-        info(checks)
+        success("Checking service '%s' succeeded (%d tasks running)\n\033[39m%s" % (service.service_name, service.original_running_count, checks))
 
     def create_service(self, service):
         res_service = self.awsutils.create_service(cluster=service.task_environment.cluster_name, service=service.service_name, taskDefinition=service.task_definition_arn, desiredCount=service.task_environment.desired_count, maximumPercent=service.task_environment.maximum_percent, minimumHealthyPercent=service.task_environment.minimum_healthy_percent, distinctInstance=service.task_environment.distinct_instance)
@@ -171,13 +170,13 @@ class ServiceManager(object):
         self.check_service()
 
     def delete_unused_services(self, dry_run=False):
-        if not self.is_delete_unused_service:
-            info("Do not delete unused service")
-            return
         if dry_run:
             h1("Step: Check Delete Unused Service")
         else:
             h1("Step: Delete Unused Service")
+        if not self.is_delete_unused_service:
+            info("Do not delete unused service")
+            return
 
         for cluster_name in self.cluster_list:
             running_service_arn_list = self.awsutils.list_services(cluster_name)
