@@ -1,4 +1,5 @@
 # coding: utf-8
+import time
 from boto3 import Session
 from botocore.exceptions import WaiterError, ClientError
 
@@ -153,7 +154,9 @@ class AwsUtils(object):
         if failures:
             raise Exception("Service '%s' is %s in cluster '%s'" % (service, failures[0].get('reason'), cluster))
 
-        return self.describe_service(cluster=cluster, service=service)
+        time.sleep(5)
+        service = self.describe_service(cluster=cluster, service=service)
+        return service
 
     def register_task_definition(self, task_definition):
         """
