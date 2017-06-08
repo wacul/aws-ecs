@@ -261,10 +261,9 @@ class Service(object):
             # set parameters to docker environment
             for container_definitions in task_definition.get("containerDefinitions"):
                 task_environment = container_definitions.get("environment")
-                if task_environment is None:
-                    container_definitions["environment"] = env
-                else:
-                    task_environment.extend(env)
+                if task_environment is not None:
+                    env.append(task_environment)
+                container_definitions["environment"] = env
             task_definition_list.append(task_definition)
         service_list = Service._import_service_from_task_definitions(task_definition_list)
 
