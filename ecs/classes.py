@@ -262,7 +262,9 @@ class Service(object):
             for container_definitions in task_definition.get("containerDefinitions"):
                 task_environment = container_definitions.get("environment")
                 if task_environment is not None:
-                    env.append(task_environment)
+                    if not isinstance(task_environment, list):
+                        raise Exception("'%s' taskDefinitionTemplate environment value must be list. " % service_name)
+                    env.extend(task_environment)
                 container_definitions["environment"] = env
             task_definition_list.append(task_definition)
         service_list = Service._import_service_from_task_definitions(task_definition_list)
