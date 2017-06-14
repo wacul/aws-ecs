@@ -1,9 +1,8 @@
 # coding: utf-8
-import sys, os, time, logging, yaml, json, jinja2
+import sys, os, time, logging, yaml, json, jinja2, botocore
 import render
 from enum import Enum
 from distutils.util import strtobool
-from botocore.exceptions import WaiterError, ClientError
 from datadiff import diff
 
 logger = logging.getLogger(__name__)
@@ -316,7 +315,7 @@ class EcsUtils(object):
         while True:
             try:
                 response = awsutils.register_task_definition(task_definition=task_definition)
-            except ClientError as e:
+            except botocore.exceptions.ClientError as e:
                 error_code = e.response['Error']['Code']
                 if error_code == 'ThrottlingException':
                     if retryCount > 6:
@@ -335,7 +334,7 @@ class EcsUtils(object):
         while True:
             try:
                 res_service = awsutils.wait_for_stable(cluster=service.task_environment.cluster_name, service=service.service_name)
-            except WaiterError:
+            except botocore.exceptions.WaiterError:
                 if retryCount > 2:
                     raise
                 retryCount = retryCount + 1
@@ -350,7 +349,7 @@ class EcsUtils(object):
         while True:
             try:
                 awsutils.deregister_task_definition(service.original_task_definition_arn)
-            except ClientError as e:
+            except botocore.exceptions.ClientError as e:
                 error_code = e.response['Error']['Code']
                 if error_code == 'ThrottlingException':
                     if retryCount > 3:
