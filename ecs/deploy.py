@@ -71,7 +71,6 @@ class DeployProcess(Thread):
 
     def __register_task_definition(self, service: Service):
         # for register task rate limit
-        time.sleep(randint(1, 3))
         retry_count = 0
         while True:
             try:
@@ -91,7 +90,6 @@ class DeployProcess(Thread):
 
     def check_service_task(self, describe_service: DescribeService):
         # for describe task rate limit
-        time.sleep(randint(1, 3))
         retry_count = 0
         while True:
             try:
