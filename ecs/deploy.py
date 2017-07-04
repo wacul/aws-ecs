@@ -340,6 +340,7 @@ def test_templates(args):
     files = os.listdir(args.environment_yaml_dir)
     if files is None or len(files) == 0:
         raise Exception("environment yaml file not found.")
+    services_config = yaml.load(args.services_yaml)
     for f in files:
         file_path = os.path.join(args.environment_yaml_dir, f)
         if os.path.isfile(file_path):
@@ -356,14 +357,14 @@ def test_templates(args):
                 )
 
                 get_service_list_yaml(
-                    args.services_config,
-                    environment_config,
-                    args.task_definition_config_env,
-                    args.deploy_service_group,
-                    args.template_group,
-                    environment
+                    services_config=services_config,
+                    environment_config=environment_config,
+                    task_definition_config_env=args.task_definition_config_env,
+                    deploy_service_group=None,
+                    template_group=None,
+                    environment=environment
                 )
-    success("Template check environment `{environment}` done.".format(environment=environment))
+        success("Template check environment `{environment}` done.".format(environment=environment))
 
 
 def get_deploy_list(
