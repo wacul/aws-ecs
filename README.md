@@ -235,8 +235,3 @@ docker run -it --rm -e "AWS_PROFILE=profile" -v $HOME/.aws/:/root/.aws/ -v $(pwd
 ```
 docker run -it --rm -e "AWS_PROFILE=profile" -v $HOME/.aws/:/root/.aws/ -v $(pwd)/infra/:/infra quay.io/wacul/aws-ecs service --environment-yaml /infra/conf/dev.yml --service-yaml /infra/services.yml --template-group web-repo --dry-run
 ```
-
-* run task
-```
-docker run -it --rm -v $(pwd)/infra/:/infra quay.io/wacul/aws-ecs taskrun --task-definition-template-file /infra/task.json --task-definition-config-json /infra/conf/environment.json --cluster cluster --tumeout 600
-```

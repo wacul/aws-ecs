@@ -1,16 +1,16 @@
 # coding: utf-8
-import time
 from boto3 import Session
-from botocore.exceptions import WaiterError, ClientError
+from botocore.exceptions import ClientError
+
 
 class ServiceNotFoundException(Exception):
     pass
+
 
 class AwsUtils(object):
     def __init__(self, access_key, secret_key, region='us-east-1'):
         session = Session(aws_access_key_id=access_key, aws_secret_access_key=secret_key, region_name=region)
         self.client = session.client('ecs')
-
 
     def describe_cluster(self, cluster):
         """
@@ -27,7 +27,7 @@ class AwsUtils(object):
     def describe_task_definition(self, name):
         try:
             response = self.client.describe_task_definition(taskDefinition=name)
-        except ClientError as e:
+        except ClientError:
             return None
         return response.get('taskDefinition')
 
@@ -56,7 +56,7 @@ class AwsUtils(object):
         response = self.client.describe_services(cluster=cluster, services=[service])
         failures = response.get('failures')
         if failures:
-            raise ServiceNotFoundException("Service '%s' is %s in cluster '%s'" % (service, failures[0].get('reason'), cluster))
+            raise ServiceNotFoundException(f"Service '{service}' is {failures[0].get('reason')} in cluster '{cluster}'")
         res_services = response['services']
         # 複数同名のサービスが見つかったら、ACTIVEを返しておく
         if len(res_services) > 1:
@@ -68,11 +68,11 @@ class AwsUtils(object):
     def describe_services(self, cluster, service_list):
         """
         Describe the specified service or raise an Exception if service does not exists in cluster
+        :param service_list: 
         :param cluster: the cluster name
-        :param service: the service names
         :return: the response or raise an Exception
         """
-        result = { "services": [], "failures": [] }
+        result = {"services": [], "failures": []}
         while len(service_list) > 0:
             response = self.client.describe_services(cluster=cluster, services=service_list[:10])
             if len(response['services']) > 0:
@@ -84,16 +84,18 @@ class AwsUtils(object):
 
             failures = response.get('failures')
 
-        # リストからサービス詳細が取れなければエラーにしてしまう
-        if len(failures) > 0:
-            message = "describe_service failure."
-            for failure in failures:
-                message = message + "\nservice: %s, reson: %s" % (failure.get('arn'), failure.get('reason'))
-            raise ServiceNotFoundException("message")
+            # リストからサービス詳細が取れなければエラーにしてしまう
+            if len(failures) > 0:
+                message = "describe_service failure."
+                for failure in failures:
+                    message = message + "\nservice: %s, reson: %s" % (failure.get('arn'), failure.get('reason'))
+                raise ServiceNotFoundException("message")
         services = result.get('services')
 
         # 重複チェック
         t = set()
+        if not isinstance(services, list):
+            return []
         dup_service_names = [x for x in services if x["serviceName"] in t or t.add(x["serviceName"])]
         dup_services = []
         for d in dup_service_names:
@@ -105,33 +107,34 @@ class AwsUtils(object):
             # 重複したものがあればACTIVEのみ取り出す。どちらも違うなら取得順
             active_dup_services = [x for x in dup_services if x["status"] == 'ACTIVE']
             inactive_dup_services = [x for x in dup_services if x["status"] != 'ACTIVE']
-            if len(active_services) > 1:
-                services.append(active_service[0])
+            if len(active_dup_services) > 1:
+                services.append(active_dup_services[0])
             else:
-                services.append(inactive_service[0])
+                services.append(inactive_dup_services[0])
         return services
 
-    def create_service(self, cluster, service, taskDefinition, desiredCount, maximumPercent, minimumHealthyPercent, distinctInstance):
+    def create_service(self, cluster, service, task_definition, desired_count,
+                       maximum_percent, minimum_healthy_percent, distinct_instance):
         """
         Create service
         :param cluster: the cluster name
         :param service: the service name
-        :param taskDefinition: taskDefinition
-        :param desiredCount: desiredCount
-        :param maximumPercent: maximumPercent
-        :param minimumHealthyPercent: minimumHealthyPercent
-        :param distinctInstance: placementConstraints distictInstance
+        :param task_definition: taskDefinition
+        :param desired_count: desiredCount
+        :param maximum_percent: maximumPercent
+        :param minimum_healthy_percent: minimumHealthyPercent
+        :param distinct_instance: placementConstraints distictInstance
         :return: the response or raise an Exception
         """
-        if distinctInstance:
+        if distinct_instance:
             response = self.client.create_service(
                 cluster=cluster,
                 serviceName=service,
-                taskDefinition=taskDefinition,
-                desiredCount=desiredCount,
+                taskDefinition=task_definition,
+                desiredCount=desired_count,
                 deploymentConfiguration={
-                    'maximumPercent': maximumPercent,
-                    'minimumHealthyPercent': minimumHealthyPercent
+                    'maximumPercent': maximum_percent,
+                    'minimumHealthyPercent': minimum_healthy_percent
                 },
                 placementConstraints=[
                     {
@@ -143,20 +146,18 @@ class AwsUtils(object):
             response = self.client.create_service(
                 cluster=cluster,
                 serviceName=service,
-                taskDefinition=taskDefinition,
-                desiredCount=desiredCount,
+                taskDefinition=task_definition,
+                desiredCount=desired_count,
                 deploymentConfiguration={
-                    'maximumPercent': maximumPercent,
-                    'minimumHealthyPercent': minimumHealthyPercent
+                    'maximumPercent': maximum_percent,
+                    'minimumHealthyPercent': minimum_healthy_percent
                 }
             )
         failures = response.get('failures')
         if failures:
-            raise Exception("Service '%s' is %s in cluster '%s'" % (service, failures[0].get('reason'), cluster))
+            raise Exception(f"Service '{service}' is {failures} in cluster '{cluster}'")
 
-        time.sleep(5)
-        service = self.describe_service(cluster=cluster, service=service)
-        return service
+        return response['service']
 
     def register_task_definition(self, task_definition):
         """
@@ -164,31 +165,46 @@ class AwsUtils(object):
         :param task_definition: the task definition
         :return: the response or raise an Exception
         """
-        family=task_definition.get('family')
-        containerDefinitions=task_definition.get('containerDefinitions')
-        volumes=task_definition.get('volumes', [])
-        networkMode=task_definition.get('networkMode', None)
-        taskRoleArn=task_definition.get('taskRoleArn', None)
-        if networkMode is not None and taskRoleArn is not None:
-            response = self.client.register_task_definition(family=family, containerDefinitions=containerDefinitions, volumes=volumes, networkMode=networkMode, taskRoleArn=taskRoleArn)
-        elif networkMode is not None:
-            response = self.client.register_task_definition(family=family, containerDefinitions=containerDefinitions, volumes=volumes, networkMode=networkMode)
-        elif taskRoleArn is not None:
-            response = self.client.register_task_definition(family=family, containerDefinitions=containerDefinitions, volumes=volumes, taskRoleArn=taskRoleArn)
+        family = task_definition.get('family')
+        container_definitions = task_definition.get('containerDefinitions')
+        volumes = task_definition.get('volumes', [])
+        network_mode = task_definition.get('networkMode', None)
+        task_role_arn = task_definition.get('taskRoleArn', None)
+        if network_mode is not None and task_role_arn is not None:
+            response = self.client.register_task_definition(
+                family=family,
+                containerDefinitions=container_definitions,
+                volumes=volumes,
+                networkMode=network_mode,
+                taskRoleArn=task_role_arn
+            )
+        elif network_mode is not None:
+            response = self.client.register_task_definition(
+                family=family, containerDefinitions=container_definitions, volumes=volumes, networkMode=network_mode
+            )
+        elif task_role_arn is not None:
+            response = self.client.register_task_definition(
+                family=family, containerDefinitions=container_definitions, volumes=volumes, taskRoleArn=task_role_arn
+            )
         else:
-            response = self.client.register_task_definition(family=family, containerDefinitions=containerDefinitions, volumes=volumes)
+            response = self.client.register_task_definition(
+                family=family, containerDefinitions=container_definitions, volumes=volumes
+            )
         task_definition = response.get('taskDefinition')
         if task_definition.get('status') is 'INACTIVE':
             arn = task_definition.get('taskDefinitionArn')
             raise Exception('Task definition (%s) is inactive' % arn)
-        return response
+        return task_definition
 
-    def deregister_task_definition(self, taskDefinition):
-        return self.client.deregister_task_definition(taskDefinition=taskDefinition)
+    def deregister_task_definition(self, task_definition):
+        return self.client.deregister_task_definition(taskDefinition=task_definition)
 
-    def downscale_service(self, cluster, service, maximumPercent, minimumHealthyPercent, delta=1):
+    def downscale_service(self, cluster, service, maximum_percent, minimum_healthy_percent, delta=1):
         """
         Downscale a service
+        :param maximum_percent:
+        :param minimum_healthy_percent:
+        :return:
         :param cluster: the cluster name
         :param service: the service name
         :param delta: Number of tasks to shutdown relatively to the running tasks (1 by default)
@@ -198,11 +214,20 @@ class AwsUtils(object):
         running_count = (response.get('services')[0]).get('runningCount')
         task_definition = (response.get('services')[0]).get('taskDefinition')
         desired_count = running_count - delta
-        return self.update_service(cluster=cluster, service=service, taskDefinition=task_definition, desiredCount=desired_count, maximumPercent=maximumPercent, minimumHealthyPercent=minimumHealthyPercent)
+        return self.update_service(
+            cluster=cluster,
+            service=service,
+            task_definition=task_definition,
+            desired_count=desired_count,
+            maximum_percent=maximum_percent,
+            minimum_healthy_percent=minimum_healthy_percent
+        )
 
-    def upscale_service(self, cluster, service, maximumPercent, minimumHealthyPercent, delta=1):
+    def upscale_service(self, cluster, service, maximum_percent, minimum_healthy_percent, delta=1):
         """
         Upscale a service
+        :param minimum_healthy_percent: 
+        :param maximum_percent: 
         :param cluster: the cluster name
         :param service: the service name
         :param delta: Number of tasks to start relatively to the running tasks (1 by default)
@@ -212,30 +237,39 @@ class AwsUtils(object):
         running_count = (response.get('services')[0]).get('runningCount')
         task_definition = (response.get('services')[0]).get('taskDefinition')
         desired_count = running_count + delta
-        return self.update_service(cluster=cluster, service=service, taskDefinition=task_definition, desiredCount=desired_count, maximumPercent=maximumPercent, minimumHealthyPercent=minimumHealthyPercent)
+        return self.update_service(
+            cluster=cluster,
+            service=service,
+            task_definition=task_definition,
+            desired_count=desired_count,
+            maximum_percent=maximum_percent,
+            minimum_healthy_percent=minimum_healthy_percent
+        )
 
-    def update_service(self, cluster, service, taskDefinition, maximumPercent, minimumHealthyPercent, desiredCount=None):
-        """
-        Update the service with the task definition
-        :param cluster: the cluster name
-        :param service: the service name
-        :param taskDefinition: the task definition
-        :param delta: Number of tasks to start/shutdown relatively to the running tasks
-        :return: the response or raise an Exception
-        """
-        if desiredCount is None:
-            self.client.update_service(cluster=cluster, service=service, taskDefinition=taskDefinition,
+    def update_service(
+            self, cluster, service, task_definition, maximum_percent, minimum_healthy_percent, desired_count=None
+    ):
+        if desired_count is None:
+            self.client.update_service(
+                cluster=cluster,
+                service=service,
+                taskDefinition=task_definition,
                 deploymentConfiguration={
-                    'maximumPercent': maximumPercent,
-                    'minimumHealthyPercent': minimumHealthyPercent
-                })
+                    'maximumPercent': maximum_percent,
+                    'minimumHealthyPercent': minimum_healthy_percent
+                }
+            )
         else:
-            self.client.update_service(cluster=cluster, service=service, taskDefinition=taskDefinition,
+            self.client.update_service(
+                cluster=cluster,
+                service=service,
+                taskDefinition=task_definition,
                 deploymentConfiguration={
-                    'maximumPercent': maximumPercent,
-                    'minimumHealthyPercent': minimumHealthyPercent
+                    'maximumPercent': maximum_percent,
+                    'minimumHealthyPercent': minimum_healthy_percent
                 },
-                desiredCount=desiredCount)
+                desiredCount=desired_count
+            )
 
         return self.describe_service(cluster=cluster, service=service)
 
@@ -256,16 +290,16 @@ class AwsUtils(object):
 
         failures = response.get('failures')
         if failures:
-            raise Exception('Task %s failed: %s' % (failures[0].get('arn'), failures[0].get('reason')))
+            raise Exception(f'Task {failures[0].get("arn")} failed: {failures[0].get("reason")}')
 
-        taskArn = (response.get('tasks')[0]).get('taskArn')
-        return taskArn
+        task_arn = (response.get('tasks')[0]).get('taskArn')
+        return task_arn
 
-    def describe_task(self, cluster, taskArn):
-        response = self.client.describe_tasks(cluster=cluster, tasks=[taskArn])
+    def describe_task(self, cluster, task_arn):
+        response = self.client.describe_tasks(cluster=cluster, tasks=[task_arn])
 
         failures = response.get('failures')
         if failures:
-            raise Exception('Can\'t retreive task %s description: %s' % (failures[0].get('arn'), failures[0].get('reason')))
+            raise Exception(f'Can\'t retreive task {failures[0].get("arn")} description: {failures[0].get("reason")}')
 
         return response.get('tasks')[0]

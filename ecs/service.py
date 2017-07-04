@@ -1,269 +1,354 @@
 # coding: utf-8
-import sys, time, traceback
+import json
+import logging
+import os
+from distutils.util import strtobool
+
+import jinja2
+from datadiff import diff
+
 import render
-from random import randint
-from multiprocessing import Process, Pool, Queue
-from aws import AwsUtils, ServiceNotFoundException
-from queue import Queue, Empty
-from threading import Thread
-from botocore.exceptions import WaiterError, ClientError
-from ecs.classes import ProcessMode, ProcessStatus, EnvironmentValueNotFoundException, TaskEnvironment, Service, EcsUtils, h1, success, error, info
+from ecs.classes import DeployTargetType, Deploy, EnvironmentValueNotFoundException, ParameterInvalidException, \
+    ParameterNotFoundException
+from ecs.utils import is_same_container_definition, adjust_container_definition
 
-class ServiceProcess(Thread):
-    def __init__(self, task_queue, key, secret, region, is_service_zero_keep):
-        super().__init__()
-        self.task_queue = task_queue
-        self.awsutils = AwsUtils(access_key=key, secret_key=secret, region=region)
-        self.is_service_zero_keep = is_service_zero_keep
+logger = logging.getLogger(__name__)
 
-    def run(self):
-        while True:
-            try:
-                service, mode = self.task_queue.get_nowait()
-            except Empty:
-                time.sleep(1)
-                continue
-            try:
-                self.process(service, mode)
-            except:
-                service.status = ProcessStatus.error
-                error("Unexpected error. service: %s.\n%s" % (service.service_name, traceback.format_exc()))
-            finally:
-                self.task_queue.task_done()
 
-    def process(self, service, mode):
-        if service.status == ProcessStatus.error:
-            error("service '%s' previous process error. skipping." % service.service_name)
-            return
-
-        if mode == ProcessMode.registerTask:
-            # for register task rate limit
-            time.sleep(randint(1,3))
-            service.task_definition_arn = EcsUtils.register_task_definition(self.awsutils, service.task_definition)
-            success("Registering task definition '%s' succeeded (arn: '%s')" % (service.task_name, service.task_definition_arn))
-
-        elif mode == ProcessMode.checkService:
-            self.check_service(service)
-
-        elif mode == ProcessMode.createService:
-            self.create_service(service)
-
-        elif mode == ProcessMode.updateService:
-            self.update_service(service)
-
-        elif mode == ProcessMode.waitForStable:
-            EcsUtils.wait_for_stable(self.awsutils, service)
-            EcsUtils.deregister_task_definition(self.awsutils, service)
-            success("service '%s' (%d tasks) update completed"
-                        % (service.service_name, service.running_count))
-
-    def check_service(self, service):
+class TaskEnvironment(object):
+    def __init__(self, task_definition: dict):
         try:
-            res_service = self.awsutils.describe_service(service.task_environment.cluster_name, service.service_name)
-        except ServiceNotFoundException:
-            error("Service '%s' not Found. will be created." % (service.service_name))
-            return
-            
-        if res_service['status'] == 'INACTIVE':
-            error("Service '%s' status is INACTIVE. will be recreated." % (service.service_name))
-            return
-        if res_service['status'] == 'DRAINING':
-            error("Service '%s' status is DRAINING. will be recreated." % (service.service_name))
-            return
-        service.original_task_definition_arn = res_service.get('taskDefinition')
-        service.original_running_count = res_service.get('runningCount')
-        service.original_desired_count = res_service.get('desiredCount')
-        service.desired_count = service.original_desired_count
-        service.service_exists = True
+            task_environment_list = task_definition['containerDefinitions'][0]['environment']
+        except:
+            raise EnvironmentValueNotFoundException(
+                f"task definition is lack of environment.\ntask definition:\n{task_definition}")
 
-        original_task_definition = self.awsutils.describe_task_definition(service.original_task_definition_arn)
-        checks = EcsUtils.check_container_definition(original_task_definition['containerDefinitions'], service.task_definition['containerDefinitions'])
-        success("Checking service '%s' succeeded (%d tasks running)\n\033[39m%s" % (service.service_name, service.original_running_count, checks))
+        self.environment = None
+        self.cluster_name = None
+        self.service_group = None
+        self.template_group = None
+        self.desired_count = None
+        self.is_downscale_task = None
+        self.minimum_healthy_percent = 50
+        self.maximum_percent = 200
+        self.distinct_instance = False
+        for task_environment in task_environment_list:
+            if task_environment['name'] == 'ENVIRONMENT':
+                self.environment = task_environment['value']
+            if task_environment['name'] == 'CLUSTER_NAME':
+                self.cluster_name = task_environment['value']
+            elif task_environment['name'] == 'SERVICE_GROUP':
+                self.service_group = task_environment['value']
+            elif task_environment['name'] == 'TEMPLATE_GROUP':
+                self.template_group = task_environment['value']
+            elif task_environment['name'] == 'DESIRED_COUNT':
+                self.desired_count = int(task_environment['value'])
+            elif task_environment['name'] == 'MINIMUM_HEALTHY_PERCENT':
+                self.minimum_healthy_percent = int(task_environment['value'])
+            elif task_environment['name'] == 'MAXIMUM_PERCENT':
+                self.maximum_percent = int(task_environment['value'])
+            elif task_environment['name'] == 'DISTINCT_INSTANCE':
+                self.distinct_instance = strtobool(task_environment['value'])
+        if self.environment is None:
+            raise EnvironmentValueNotFoundException(
+                f"task definition is lack of environment `ENVIRONMENT`.\ntask definition:\n{task_definition}")
+        elif self.cluster_name is None:
+            raise EnvironmentValueNotFoundException(
+                f"task definition is lack of environment `CLUSTER_NAME`.\ntask definition:\n{task_definition}")
+        elif self.desired_count is None:
+            raise EnvironmentValueNotFoundException(
+                f"task definition is lack of environment `DESIRED_COUNT`.\ntask definition:\n{task_definition}")
 
-    def create_service(self, service):
-        res_service = self.awsutils.create_service(cluster=service.task_environment.cluster_name, service=service.service_name, taskDefinition=service.task_definition_arn, desiredCount=service.task_environment.desired_count, maximumPercent=service.task_environment.maximum_percent, minimumHealthyPercent=service.task_environment.minimum_healthy_percent, distinctInstance=service.task_environment.distinct_instance)
-        service.original_running_count = res_service.get('runningCount')
-        service.original_desired_count = res_service.get('desiredCount')
-        service.desired_count = service.original_desired_count
-        success("Create service '%s' succeeded (%d tasks running)" % (service.service_name, service.original_running_count))
 
-    def update_service(self, service):
-        desiredCount = service.task_environment.desired_count
-        # サービスのタスク数が0だったらそれを維持する
-        if self.is_service_zero_keep and service.original_desired_count == 0:
-            desiredCount = 0
-        res_service = self.awsutils.update_service(cluster=service.task_environment.cluster_name, service=service.service_name, taskDefinition=service.task_definition_arn, maximumPercent=service.task_environment.maximum_percent, minimumHealthyPercent=service.task_environment.minimum_healthy_percent, desiredCount=desiredCount)
-        service.running_count = res_service.get('runningCount')
-        service.desired_count = res_service.get('desiredCount')
-        success("Update service '%s' with task definition '%s' succeeded" % (service.service_name, service.task_definition_arn))
+class DescribeService(Deploy):
+    def __init__(self, service_description: dict):
+        self.service_name = service_description['serviceName']
+        self.cluster_arn = service_description['clusterArn']
+        self.cluster_name = arn_to_name(self.cluster_arn)
+        self.task_definition_arn = service_description['taskDefinition']
+        self.running_count = service_description['runningCount']
+        self.desired_count = service_description['desiredCount']
+
+        self.task_definition = None
+        self.task_environment = None
+        self.family = None
+
+        self.service_exists = True
+        if service_description['status'] != 'ACTIVE':
+            self.service_exists = False
+
+        super().__init__(name=self.service_name, target_type=DeployTargetType.service_describe)
+
+    def set_from_task_definition(self, task_definition: dict):
+        self.task_definition = task_definition
+        self.task_environment = TaskEnvironment(task_definition)
+        self.family = task_definition['family']
 
 
-class ServiceManager(object):
-    def __init__(self, args):
-        self.awsutils = AwsUtils(access_key=args.key, secret_key=args.secret, region=args.region)
-        self.task_queue = Queue()
+class Service(Deploy):
+    def __init__(self, task_definition: dict):
+        self.task_definition = task_definition
+        self.task_environment = TaskEnvironment(task_definition)
+        self.family = task_definition['family']
+        self.service_name = self.family + '-service'
+        self.desired_count = self.task_environment.desired_count
 
-        self.service_list, self.deploy_service_list, self.environment = Service.get_service_list(services_yaml=args.services_yaml,
-                                                                                                 environment_yaml=args.environment_yaml,
-                                                                                                 task_definition_template_dir=args.task_definition_template_dir,
-                                                                                                 task_definition_config_json=args.task_definition_config_json,
-                                                                                                 task_definition_config_env=args.task_definition_config_env,
-                                                                                                 deploy_service_group=args.deploy_service_group,
-                                                                                                 template_group=args.template_group)
+        self.origin_task_definition_arn = None
+        self.origin_task_definition = None
+        self.task_definition_arn = None
+        self.origin_service_exists = False
+        self.is_same_task_definition = False
+        self.running_count = 0
 
-        self.threads_count = args.threads_count
-        # thread数がタスクの数を超えているなら減らす
-        if len(self.deploy_service_list) < self.threads_count:
-           self.threads_count = len(self.deploy_service_list)
+        super().__init__(self.service_name, target_type=DeployTargetType.service)
 
-        self.key = args.key
-        self.secret = args.secret
-        self.region = args.region
-        self.is_service_zero_keep = args.service_zero_keep
-        self.template_group = args.template_group
-        self.is_delete_unused_service = args.delete_unused_service
+    def set_from_describe_service(self, describe_service: DescribeService):
+        self.origin_service_exists = describe_service.service_exists
+        self.origin_task_definition = describe_service.task_definition
+        self.origin_task_definition_arn = describe_service.task_definition_arn
+        self.running_count = describe_service.running_count
+        self.desired_count = describe_service.desired_count
 
-        self.cluster_list = []
-        for service in self.service_list:
-            if service.task_environment.cluster_name not in self.cluster_list:
-                self.cluster_list.append(service.task_environment.cluster_name)
+    def set_task_definition_arn(self, task_definition: dict):
+        self.task_definition_arn = task_definition.get('taskDefinitionArn')
 
-        self.error = False
+    def update(self, describe_service: dict):
+        self.running_count = describe_service.get('runningCount')
+        self.desired_count = describe_service.get('desiredCount')
 
-    def start_threads(self):
-        # threadの開始
-        for i in range(self.threads_count):
-            thread = ServiceProcess(self.task_queue, self.key, self.secret, self.region, self.is_service_zero_keep)
-            thread.setDaemon(True)
-            thread.start()
-
-    def run(self):
-        # Step: Check ECS cluster
-        self.check_ecs_cluster()
-
-        # Step: Delete Unused Service
-        self.delete_unused_services()
-
-        self.start_threads()
-
-        # Step: Register New Task Definition
-        self.register_new_task_definition()
-
-        # Step: service
-        self.check_service()
-        self.create_service()
-        self.update_service()
-        self.wait_for_stable()
-
-        self.result_check()
-
-    def dry_run(self):
-        # Step: Check ECS cluster
-        self.check_ecs_cluster()
-
-        # Step: Check Delete Service
-        self.delete_unused_services(dry_run=True)
-
-        self.start_threads()
-
-        # Step: Check Service
-        self.check_service()
-
-    def delete_unused_services(self, dry_run=False):
-        if dry_run:
-            h1("Step: Check Delete Unused Service")
+    def compare_container_definition(self):
+        a = self.origin_task_definition['containerDefinitions']
+        b = self.task_definition['containerDefinitions']
+        ad = adjust_container_definition(a)
+        bd = adjust_container_definition(b)
+        self.is_same_task_definition = is_same_container_definition(ad, bd)
+        if self.is_same_task_definition:
+            self.task_definition_arn = self.origin_task_definition_arn
+            return "    - Container Definition is not changed."
         else:
-            h1("Step: Delete Unused Service")
-        if not self.is_delete_unused_service:
-            info("Do not delete unused service")
-            return
+            t = diff(ad, bd)
+            return f"    - Container is changed. Diff:\n{t}"
 
-        for cluster_name in self.cluster_list:
-            running_service_arn_list = self.awsutils.list_services(cluster_name)
-            services = self.awsutils.describe_services(cluster_name, running_service_arn_list)
 
-            for service_description in services:
-                service_name = service_description['serviceName']
+def arn_to_name(arn):
+    return arn.split('/')[-1]
 
-                task_definition_name = service_description['taskDefinition']
-                response_task_definition = self.awsutils.describe_task_definition(task_definition_name)
 
-                try:
-                    task_environment = TaskEnvironment(response_task_definition)
-                # 環境変数の値が足りない 
-                except EnvironmentValueNotFoundException:
-                    error("Service '%s' is lack of environment value" % (service_name))
-                    self.error = True
-                    continue
+def __deploy_service_list(service_list, deploy_service_group, template_group):
+    if deploy_service_group:
+        deploy_service_list = list(
+            filter(lambda service: service.task_environment.service_group == deploy_service_group, service_list))
+    else:
+        deploy_service_list = service_list
 
-                # 同一環境のものだけ
-                if task_environment.environment != self.environment:
-                    continue
-                # 同一テンプレートグループだけ
-                if self.template_group:
-                    if not task_environment.template_group:
-                        error("Service '%s' is not set TEMPLATE_GROUP" % (service_name))
-                        self.error = True
-                        continue
-                    if task_environment.template_group != self.template_group:
-                        continue
+    if template_group:
+        deploy_service_list = list(
+            filter(lambda service: service.task_environment.template_group == template_group, deploy_service_list))
+    if len(deploy_service_list) == 0:
+        raise Exception("Deployment target service not found.")
 
-                ident_service_list = [ service for service in self.service_list if service.service_name == service_name and service.task_environment.cluster_name == cluster_name ]
+    return deploy_service_list
 
-                if len(ident_service_list) <= 0:
-                    success("Delete service '%s'" % (service_name))
-                    if not dry_run:
-                        self.awsutils.delete_service(cluster_name, service_name)
 
-    def check_ecs_cluster(self):
-        h1("Step: Check ECS cluster")
-        for cluster_name in self.cluster_list:
-            self.awsutils.describe_cluster(cluster=cluster_name)
-            success("Checking cluster '%s' succeeded" % cluster_name)
+def get_service_list_json(
+        task_definition_template_dir,
+        task_definition_config_json,
+        task_definition_config_env,
+        deploy_service_group,
+        template_group
+):
+    service_list = []
 
-    def register_new_task_definition(self):
-        h1("Step: Register New Task Definition")
-        for service in self.deploy_service_list:
-            self.task_queue.put([service, ProcessMode.registerTask])
-        self.task_queue.join()
+    task_definition_config = json.load(task_definition_config_json)
+    environment = task_definition_config['environment']
+    files = os.listdir(task_definition_template_dir)
+    for file in files:
+        file_path = os.path.join(task_definition_template_dir, file)
+        try:
+            with open(file_path, 'r') as template:
+                task_definitions_data = render.render_template(template.read(),
+                                                               task_definition_config,
+                                                               task_definition_config_env)
+        except Exception as e:
+            raise Exception("Template error. file: %s\n%s" % (file, e))
+        try:
+            task_definitions = json.loads(task_definitions_data)
+        except json.decoder.JSONDecodeError as e:
+            raise Exception("{e.__class__.__name__} {e}\njson:\n{json}".format(e=e, json=task_definitions_data))
+        for t in task_definitions:
+            service_list.append(Service(t))
 
-    def check_service(self):
-        h1("Step: Check Deploy ECS Service")
-        for service in self.deploy_service_list:
-            self.task_queue.put([service, ProcessMode.checkService])
-        self.task_queue.join()
+    deploy_service_list = __deploy_service_list(service_list, deploy_service_group, template_group)
+    return service_list, deploy_service_list, environment
 
-    def create_service(self):
-        # Step: Create ECS Service if necessary
-        not_exists_service_list = list(filter(lambda service:service.service_exists == False, self.deploy_service_list))
-        if len(not_exists_service_list) > 0:
-            h1("Step: Create ECS Service")
-        for service in not_exists_service_list:
-            self.task_queue.put([service, ProcessMode.createService])
-        self.task_queue.join()
 
-    def update_service(self):
-        h1("Step: Update ECS Service")
-        for service in self.deploy_service_list:
-            if not service.service_exists:
-                continue
-            self.task_queue.put([service, ProcessMode.updateService])
-        self.task_queue.join()
+def get_service_list_yaml(
+        services_config,
+        environment_config,
+        task_definition_config_env,
+        deploy_service_group,
+        template_group,
+        environment
+):
+    services = services_config["services"]
+    task_definition_template_dict = services_config["taskDefinitionTemplates"]
 
-    def wait_for_stable(self):
-        h1("Step: Wait for Service Status 'Stable'")
-        for service in self.deploy_service_list:
-            if not service.service_exists:
-                continue
-            else:
-                self.task_queue.put([service, ProcessMode.waitForStable])
-        self.task_queue.join()
+    service_list = []
+    for service_name in services:
+        # 設定値と変数を取得
+        service_config, variables = __get_service_variables(
+            service_name=service_name,
+            base_service_config=services.get(service_name),
+            environment_config=environment_config
+        )
 
-    def result_check(self):
-        error_service_list = list(filter(lambda service:service.status == ProcessStatus.error, self.deploy_service_list))
-        # サービスでエラーが一個でもあれば失敗としておく
-        if len(error_service_list) > 0:
-            sys.exit(1)
-        if self.error:
-            sys.exit(1)
+        # parameter check & build docker environment
+        env = [{"name": "ENVIRONMENT", "value": environment}]
 
+        registrator = service_config.get("registrator")
+        if registrator is not None:
+            registrator = render.render_template(str(registrator), variables, task_definition_config_env)
+            try:
+                registrator = strtobool(registrator)
+            except ValueError:
+                raise ParameterInvalidException(
+                    f"Service `{service_name}` parameter `registrator` must be bool"
+                )
+            if registrator:
+                env.append({"name": "SERVICE_NAME", "value": environment})
+                env.append({"name": "SERVICE_TAGS", "value": service_name})
+
+        cluster = service_config.get("cluster")
+        if cluster is None:
+            raise ParameterNotFoundException(f"Service `{service_name}` requires parameter `cluster`")
+        cluster = render.render_template(str(cluster), variables, task_definition_config_env)
+        env.append({"name": "CLUSTER_NAME", "value": cluster})
+
+        service_group = service_config.get("serviceGroup")
+        if service_group is not None:
+            service_group = render.render_template(str(service_group), variables, task_definition_config_env)
+            env.append({"name": "SERVICE_GROUP", "value": service_group})
+
+        template_group = service_config.get("templateGroup")
+        if template_group is not None:
+            template_group = render.render_template(str(template_group), variables, task_definition_config_env)
+            env.append({"name": "TEMPLATE_GROUP", "value": template_group})
+
+        desired_count = service_config.get("desiredCount")
+        if desired_count is None:
+            raise ParameterNotFoundException(f"Service `{service_name}` requires parameter `desiredCount`")
+        desired_count = render.render_template(str(desired_count), variables, task_definition_config_env)
+        try:
+            int(desired_count)
+        except ValueError:
+            raise ParameterInvalidException(f"Service `{service_name}` parameter `desiredCount` is int")
+        env.append({"name": "DESIRED_COUNT", "value": desired_count})
+
+        minimum_healthy_percent = service_config.get("minimumHealthyPercent")
+        if minimum_healthy_percent is not None:
+            minimum_healthy_percent = render.render_template(str(minimum_healthy_percent),
+                                                             variables,
+                                                             task_definition_config_env)
+            try:
+                int(minimum_healthy_percent)
+            except ValueError:
+                raise ParameterInvalidException(
+                    f"Service `{service_name}` parameter `minimumHealthyPercent` is int")
+            env.append({"name": "MINIMUM_HEALTHY_PERCENT", "value": minimum_healthy_percent})
+
+        maximum_percent = service_config.get("maximumPercent")
+        if maximum_percent is not None:
+            maximum_percent = render.render_template(str(maximum_percent), variables, task_definition_config_env)
+            try:
+                int(maximum_percent)
+            except ValueError:
+                raise ParameterInvalidException(
+                    f"Service `{service_name}` parameter `maximumPercent` is int"
+                )
+            env.append({"name": "MAXIMUM_PERCENT", "value": str(maximum_percent)})
+
+        distinct_instance = service_config.get("distinctInstance")
+        if distinct_instance is not None:
+            distinct_instance = render.render_template(str(distinct_instance), variables, task_definition_config_env)
+            try:
+                distinct_instance = strtobool(distinct_instance)
+            except ValueError:
+                raise ParameterInvalidException(
+                    f"Service `{service_name}` parameter `distinctInstance` must be bool")
+            if distinct_instance:
+                env.append({"name": "DISTINCT_INSTANCE", "value": "true"})
+
+        task_definition_template = service_config.get("taskDefinitionTemplate")
+        if task_definition_template is None:
+            raise ParameterNotFoundException(
+                f"Service `{service_name}` requires parameter `taskDefinitionTemplate`")
+        service_task_definition_template = task_definition_template_dict.get(task_definition_template)
+        if service_task_definition_template is None or len(service_task_definition_template) == 0:
+            raise Exception("'%s' taskDefinitionTemplate not found. " % service_name)
+        if not isinstance(service_task_definition_template, str):
+            raise Exception("'%s' taskDefinitionTemplate specified template value must be str. " % service_name)
+
+        try:
+            task_definition_data = render.render_template(service_task_definition_template,
+                                                          variables,
+                                                          task_definition_config_env)
+        except jinja2.exceptions.UndefinedError:
+            logger.error("Service `%s` jinja2 varibles Undefined Error." % service_name)
+            raise
+        try:
+            task_definition = json.loads(task_definition_data)
+        except json.decoder.JSONDecodeError as e:
+            raise Exception(
+                "Service `{service}`: {e.__class__.__name__} {e}\njson:\n{json}".format(service=service_name, e=e,
+                                                                                        json=task_definition_data))
+
+        # set parameters to docker environment
+        for container_definitions in task_definition.get("containerDefinitions"):
+            task_environment = container_definitions.get("environment")
+            if task_environment is not None:
+                if not isinstance(task_environment, list):
+                    raise Exception("'%s' taskDefinitionTemplate environment value must be list. " % service_name)
+                env.extend(task_environment)
+            container_definitions["environment"] = env
+
+        service_list.append(Service(task_definition))
+
+    deploy_service_list = __deploy_service_list(service_list, deploy_service_group, template_group)
+    return service_list, deploy_service_list
+
+
+def __get_service_variables(service_name, base_service_config, environment_config):
+    variables = {"item": service_name}
+    service_config = {}
+    # サービスの値
+    variables.update(base_service_config)
+    service_config.update(base_service_config)
+    # サービスのvars
+    v = base_service_config.get("vars")
+    if v:
+        variables.update(v)
+    # 各環境の設定値
+    variables.update(environment_config)
+    # 各環境のサービス
+    environment_config_services = environment_config.get("services")
+    if environment_config_services:
+        environment_service = environment_config_services.get(service_name)
+        if environment_service:
+            variables.update(environment_service)
+            service_config.update(environment_service)
+            environment_vars = environment_service.get("vars")
+            if environment_vars:
+                variables.update(environment_vars)
+    return service_config, variables
+
+
+def fetch_aws_service(cluster_list, awsutils) -> list:
+    l = []
+    for cluster_name in cluster_list:
+        running_service_arn_list = awsutils.list_services(cluster_name)
+        l.extend(awsutils.describe_services(cluster_name, running_service_arn_list))
+    describe_service_list = []
+    for service_description in l:
+        describe = DescribeService(service_description=service_description)
+        describe_service_list.append(describe)
+    return describe_service_list

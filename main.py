@@ -1,11 +1,9 @@
 # coding: utf-8
+import argparse
 import logging
 import sys
-import argparse
-import traceback
-from ecs.service import ServiceManager
-from ecs.runtask import RunTask
-from ecs.classes import Service
+
+from ecs.deploy import DeployManager, test_templates
 
 logging.basicConfig(stream=sys.stdout, level=logging.INFO, format='%(levelname)s: %(message)s')
 logging.getLogger("botocore").setLevel(logging.WARNING)
@@ -30,14 +28,17 @@ def init():
     service_parser.add_argument('--dry-run', default=False, action='store_true')
 
     service_parser.add_argument('--task-definition-config-env', default=True, action='store_true')
-    service_parser.add_argument('--no-task-definition-config-env', dest='task_definition_config_env', default=True, action='store_false')
+    service_parser.add_argument('--no-task-definition-config-env', dest='task_definition_config_env', default=True,
+                                action='store_false')
     service_parser.add_argument('--threads-count', type=int, default=10)
     service_parser.add_argument('--service-zero-keep', dest='service_zero_keep', default=True, action='store_true')
     service_parser.add_argument('--no-service-zero-keep', dest='service_zero_keep', default=True, action='store_false')
     service_parser.add_argument('--template-group')
     service_parser.add_argument('--deploy-service-group')
-    service_parser.add_argument('--delete-unused-service', dest='delete_unused_service', default=True, action='store_true')
-    service_parser.add_argument('--no-delete-unused-service', dest='delete_unused_service', default=True, action='store_false')
+    service_parser.add_argument('--delete-unused-service', dest='delete_unused_service', default=True,
+                                action='store_true')
+    service_parser.add_argument('--no-delete-unused-service', dest='delete_unused_service', default=True,
+                                action='store_false')
 
     test_templates_parser = subparser.add_parser("test-templates")
     test_templates_parser.add_argument('--task-definition-template-dir')
@@ -45,57 +46,31 @@ def init():
     test_templates_parser.add_argument('--services-yaml', type=argparse.FileType('r'))
     test_templates_parser.add_argument('--environment-yaml-dir')
     test_templates_parser.add_argument('--task-definition-config-env', default=True, action='store_true')
-    test_templates_parser.add_argument('--no-task-definition-config-env', dest='task_definition_config_env', default=True, action='store_false')
+    test_templates_parser.add_argument('--no-task-definition-config-env', dest='task_definition_config_env',
+                                       default=True, action='store_false')
 
-    runtask_parser = subparser.add_parser("runtask")
-    runtask_parser.add_argument('--task-definition-template-file', required=True)
-    runtask_parser.add_argument('--key', default="")
-    runtask_parser.add_argument('--secret', default="")
-    runtask_parser.add_argument('--region', default='us-east-1')
-    runtask_parser.add_argument('--timeout', type=int, default=300)
-    runtask_parser.add_argument('--cluster', default='default')
-    runtask_parser.add_argument('--task-definition-config-json', required=True)
-    runtask_parser.add_argument('--task-definition-config-env', dest='task_definition_config_env', default=True, action='store_true')
-    runtask_parser.add_argument('--no-task-definition-config-env', dest='task_definition_config_env', default=True, action='store_false')
-    args = parser.parse_args()
-    if args.command == 'runtask':
-        if args.task_definition_template_dir is None and args.services_yaml is None:
-            logger.error("the following arguments are required: (--task-definition-template-file and --task-definition-config-json) or (--services-yaml and --environment-yaml)")
+    argp = parser.parse_args()
+    if argp.command == 'test-templates':
+        if argp.task_definition_template_dir is None and argp.services_yaml is None:
+            logger.error(
+                "the following arguments are required:"
+                " (--task-definition-template-file and --task-definition-config-json)"
+                " or (--services-yaml and --environment-yaml-dir)")
             sys.exit(1)
-        elif args.services_yaml is not None and args.environment_yaml is None:
-            logger.error("the following arguments are required: --environment-yaml")
-            sys.exit(1)
-        elif args.task_definition_template_dir is not None and args.task_definition_config_json is None:
-            logger.error("the following arguments are required: --task-definition-config-json")
-            sys.exit(1)
-    if args.command == 'test-templates':
-        if args.task_definition_template_dir is None and args.services_yaml is None:
-            logger.error("the following arguments are required: (--task-definition-template-file and --task-definition-config-json) or (--services-yaml and --environment-yaml-dir)")
-            sys.exit(1)
-        elif args.services_yaml is not None and args.environment_yaml_dir is None:
+        elif argp.services_yaml is not None and argp.environment_yaml_dir is None:
             logger.error("the following arguments are required: --environment-yaml-dir")
             sys.exit(1)
-        elif args.task_definition_template_dir is not None and args.task_definition_config_json is None:
+        elif argp.task_definition_template_dir is not None and argp.task_definition_config_json is None:
             logger.error("the following arguments are required: --task-definition-config-json")
             sys.exit(1)
-    return args
+    return argp
 
 if __name__ == '__main__':
     args = init()
-    if args.command == 'runtask':
-        run_task = RunTask(args)
-        run_task.run()
-    elif args.command == 'test-templates':
-        Service.get_service_list(services_yaml=args.services_yaml,
-                                 environment_yaml=None,
-                                 task_definition_template_dir=args.task_definition_template_dir,
-                                 task_definition_config_json=args.task_definition_config_json,
-                                 task_definition_config_env=args.task_definition_config_env,
-                                 deploy_service_group=None,
-                                 template_group=None,
-                                 environment_yaml_dir=args.environment_yaml_dir)
+    if args.command == 'test-templates':
+        test_templates(args=args)
     else:
-        service_manager = ServiceManager(args)
+        service_manager = DeployManager(args)
         if args.test:
             logger.info("test is successful.")
         elif args.dry_run:
