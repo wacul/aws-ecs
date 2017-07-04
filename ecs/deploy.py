@@ -90,7 +90,23 @@ class DeployProcess(Thread):
         service.set_task_definition_arn(task_definition)
 
     def check_service_task(self, describe_service: DescribeService):
-        task_definition = self.awsutils.describe_task_definition(describe_service.task_definition_arn)
+        # for describe task rate limit
+        time.sleep(randint(1, 3))
+        retry_count = 0
+        while True:
+            try:
+                task_definition = self.awsutils.describe_task_definition(describe_service.task_definition_arn)
+            except botocore.exceptions.ClientError as e:
+                error_code = e.response['Error']['Code']
+                if error_code == 'ThrottlingException':
+                    if retry_count > 6:
+                        raise
+                    retry_count = retry_count + 1
+                    time.sleep(randint(3, 10))
+                    continue
+                else:
+                    raise
+            break
         describe_service.set_from_task_definition(task_definition)
 
     def check_deploy_service(self, service: Service):
