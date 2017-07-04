@@ -281,27 +281,3 @@ class AwsUtils(object):
         waiter.wait(cluster=cluster, services=[service])
         return self.describe_service(cluster=cluster, service=service)
 
-    def run_task(self, cluster, family):
-        """
-        run the task
-        :param cluster: the cluster name
-        :param family: the task definition name
-        :return: the response or raise an Exception
-        """
-        response = self.client.run_task(cluster=cluster, taskDefinition=family)
-
-        failures = response.get('failures')
-        if failures:
-            raise Exception(f'Task {failures[0].get("arn")} failed: {failures[0].get("reason")}')
-
-        task_arn = (response.get('tasks')[0]).get('taskArn')
-        return task_arn
-
-    def describe_task(self, cluster, task_arn):
-        response = self.client.describe_tasks(cluster=cluster, tasks=[task_arn])
-
-        failures = response.get('failures')
-        if failures:
-            raise Exception(f'Can\'t retreive task {failures[0].get("arn")} description: {failures[0].get("reason")}')
-
-        return response.get('tasks')[0]
