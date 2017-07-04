@@ -3,6 +3,7 @@ import os
 import sys
 import time
 import traceback
+import json
 from multiprocessing import Queue
 from queue import Queue, Empty
 from random import randint
@@ -14,7 +15,8 @@ import yaml
 import render
 from aws import AwsUtils, ServiceNotFoundException
 from ecs.classes import ProcessMode, ProcessStatus, VariableNotFoundException
-from ecs.service import Service, DescribeService, get_service_list_json, get_service_list_yaml, fetch_aws_service
+from ecs.service import Service, DescribeService, get_service_list_json, get_service_list_yaml,\
+    fetch_aws_service, get_deploy_service_list
 from ecs.scheduled_tasks import ScheduledTask
 from ecs.utils import h1, success, error, info
 
@@ -386,8 +388,6 @@ def test_templates(args):
                     services_config=services_config,
                     environment_config=environment_config,
                     task_definition_config_env=args.task_definition_config_env,
-                    deploy_service_group=None,
-                    template_group=None,
                     environment=environment
                 )
         success("Template check environment `{environment}` done.".format(environment=environment))
@@ -412,24 +412,22 @@ def get_deploy_list(
             raise VariableNotFoundException("environment-yaml requires paramter `environment`.")
         environment = render.render_template(str(environment), environment_config, task_definition_config_env)
 
-        service_list, deploy_service_list =\
+        service_list =\
             get_service_list_yaml(
                 services_config=services_config,
                 environment_config=environment_config,
                 task_definition_config_env=task_definition_config_env,
-                deploy_service_group=deploy_service_group,
-                template_group=template_group,
                 environment=environment
             )
-        success("Template check environment `{environment}` done.".format(environment=environment))
     else:
-        service_list, deploy_service_list, environment =\
+        task_definition_config = json.load(task_definition_config_json)
+        environment = task_definition_config['environment']
+        service_list =\
             get_service_list_json(
-                task_definition_template_dir,
-                task_definition_config_json,
-                task_definition_config_env,
-                deploy_service_group,
-                template_group
+                task_definition_template_dir=task_definition_template_dir,
+                task_definition_config=task_definition_config,
+                task_definition_config_env=task_definition_config_env
             )
-        success("Template check environment `{environment}` done.".format(environment=environment))
+    deploy_service_list = get_deploy_service_list(service_list, deploy_service_group, template_group)
+    success("Template check environment `{environment}` done.".format(environment=environment))
     return service_list, deploy_service_list, environment

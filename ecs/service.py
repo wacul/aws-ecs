@@ -139,7 +139,7 @@ def arn_to_name(arn):
     return arn.split('/')[-1]
 
 
-def __deploy_service_list(service_list, deploy_service_group, template_group):
+def get_deploy_service_list(service_list, deploy_service_group, template_group):
     if deploy_service_group is not None:
         slist = []
         for service in service_list:
@@ -163,15 +163,11 @@ def __deploy_service_list(service_list, deploy_service_group, template_group):
 
 def get_service_list_json(
         task_definition_template_dir,
-        task_definition_config_json,
-        task_definition_config_env,
-        deploy_service_group,
-        template_group
-):
+        task_definition_config,
+        task_definition_config_env
+) -> list:
     service_list = []
 
-    task_definition_config = json.load(task_definition_config_json)
-    environment = task_definition_config['environment']
     files = os.listdir(task_definition_template_dir)
     for file in files:
         file_path = os.path.join(task_definition_template_dir, file)
@@ -189,18 +185,15 @@ def get_service_list_json(
         for t in task_definitions:
             service_list.append(Service(t))
 
-    deploy_service_list = __deploy_service_list(service_list, deploy_service_group, template_group)
-    return service_list, deploy_service_list, environment
+    return service_list
 
 
 def get_service_list_yaml(
         services_config,
         environment_config,
         task_definition_config_env,
-        deploy_service_group,
-        template_group,
         environment
-):
+) -> list:
     services = services_config["services"]
     task_definition_template_dict = services_config["taskDefinitionTemplates"]
 
@@ -243,7 +236,8 @@ def get_service_list_yaml(
 
         service_template_group = service_config.get("templateGroup")
         if service_template_group is not None:
-            service_template_group = render.render_template(str(service_template_group), variables, task_definition_config_env)
+            service_template_group = render.render_template(
+                str(service_template_group), variables, task_definition_config_env)
             env.append({"name": "TEMPLATE_GROUP", "value": service_template_group})
 
         desired_count = service_config.get("desiredCount")
@@ -327,8 +321,7 @@ def get_service_list_yaml(
 
         service_list.append(Service(task_definition))
 
-    deploy_service_list = __deploy_service_list(service_list, deploy_service_group, template_group)
-    return service_list, deploy_service_list
+    return service_list
 
 
 def __get_service_variables(service_name, base_service_config, environment_config):
