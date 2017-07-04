@@ -25,10 +25,7 @@ class AwsUtils(object):
         return response
 
     def describe_task_definition(self, name):
-        try:
-            response = self.client.describe_task_definition(taskDefinition=name)
-        except ClientError:
-            return None
+        response = self.client.describe_task_definition(taskDefinition=name)
         return response.get('taskDefinition')
 
     def delete_service(self, cluster, service_name):
