@@ -15,6 +15,7 @@ import render
 from aws import AwsUtils, ServiceNotFoundException
 from ecs.classes import ProcessMode, ProcessStatus, VariableNotFoundException
 from ecs.service import Service, DescribeService, get_service_list_json, get_service_list_yaml, fetch_aws_service
+from ecs.scheduled_tasks import ScheduledTask
 from ecs.utils import h1, success, error, info
 
 
@@ -49,7 +50,7 @@ class DeployProcess(Thread):
         if mode == ProcessMode.checkServiceAndTask:
             self.check_service_task(deploy)
 
-        if mode == ProcessMode.deployService:
+        elif mode == ProcessMode.deployService:
             self.process_service(deploy)
 
         elif mode == ProcessMode.checkDeployService:
@@ -57,6 +58,17 @@ class DeployProcess(Thread):
 
         elif mode == ProcessMode.waitForStable:
             wait_for_stable(self.awsutils, deploy)
+
+        elif mode == ProcessMode.deployScheduledTask:
+            self.deploy_scheduled_task(deploy)
+
+    def deploy_scheduled_task(self, scheduled_task: ScheduledTask):
+        self.awsutils.create_scheduled_task(
+            task_name=scheduled_task.family,
+            schedule_expression=scheduled_task.schedule_expression,
+            target_arn=scheduled_task.target_arn,
+            description=scheduled_task.task_environment.environment
+        )
 
     def process_service(self, service: Service):
         self.__register_task_definition(service)
@@ -334,8 +346,8 @@ def wait_for_stable(awsutils, service: Service):
     retry_count = 0
     while True:
         try:
-            res_service = awsutils.wait_for_stable(cluster=service.task_environment.cluster_name,
-                                                   service=service.service_name)
+            res_service = awsutils.wait_for_stable(cluster_name=service.task_environment.cluster_name,
+                                                   service_name=service.service_name)
         except botocore.exceptions.WaiterError:
             if retry_count > 2:
                 raise

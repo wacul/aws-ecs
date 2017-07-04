@@ -1,6 +1,6 @@
 # coding: utf-8
 from boto3 import Session
-from botocore.exceptions import ClientError
+from ecs.service import Service
 
 
 class ServiceNotFoundException(Exception):
@@ -11,6 +11,7 @@ class AwsUtils(object):
     def __init__(self, access_key, secret_key, region='us-east-1'):
         session = Session(aws_access_key_id=access_key, aws_secret_access_key=secret_key, region_name=region)
         self.client = session.client('ecs')
+        self.cloudwatch_event = session.client('events')
 
     def describe_cluster(self, cluster):
         """
@@ -272,9 +273,17 @@ class AwsUtils(object):
 
         return self.describe_service(cluster=cluster, service=service)
 
-    def wait_for_stable(self, cluster, service):
+    def wait_for_stable(self, cluster_name: str, service_name: str):
         # Waiting for the service update is done
         waiter = self.client.get_waiter('services_stable')
-        waiter.wait(cluster=cluster, services=[service])
-        return self.describe_service(cluster=cluster, service=service)
+        waiter.wait(cluster=cluster_name, services=[service_name])
+        return self.describe_service(cluster=cluster_name, service=service_name)
 
+    def create_scheduled_task(self, schedule_expression :str, task_name :str, description: str, target_arn: str) -> str:
+        response = self.cloudwatch_event.put_rule(Name=task_name,
+                                                  ScheduleExpression=schedule_expression,
+                                                  Description=description)
+        rule_arn = response['RuleArn']
+
+        targets = [{'Id': task_name, 'Arn': target_arn}]
+        self.cloudwatch_event.put_tagets(Rule=rule_arn, Targets=targets)

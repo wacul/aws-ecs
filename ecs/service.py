@@ -2,6 +2,7 @@
 import json
 import logging
 import os
+import copy
 from distutils.util import strtobool
 
 import jinja2
@@ -139,15 +140,21 @@ def arn_to_name(arn):
 
 
 def __deploy_service_list(service_list, deploy_service_group, template_group):
-    if deploy_service_group:
-        deploy_service_list = list(
-            filter(lambda service: service.task_environment.service_group == deploy_service_group, service_list))
+    if deploy_service_group is not None:
+        slist = []
+        for service in service_list:
+            if service.task_environment.service_group == deploy_service_group:
+                slist.append(service)
+        deploy_service_list = slist
     else:
-        deploy_service_list = service_list
+        deploy_service_list = copy.copy(service_list)
 
-    if template_group:
-        deploy_service_list = list(
-            filter(lambda service: service.task_environment.template_group == template_group, deploy_service_list))
+    if template_group is not None:
+        slist = []
+        for service in deploy_service_list:
+            if service.task_environment.template_group == template_group:
+                slist.append(service)
+        deploy_service_list = slist
     if len(deploy_service_list) == 0:
         raise Exception("Deployment target service not found.")
 
@@ -234,10 +241,10 @@ def get_service_list_yaml(
             service_group = render.render_template(str(service_group), variables, task_definition_config_env)
             env.append({"name": "SERVICE_GROUP", "value": service_group})
 
-        template_group = service_config.get("templateGroup")
-        if template_group is not None:
-            template_group = render.render_template(str(template_group), variables, task_definition_config_env)
-            env.append({"name": "TEMPLATE_GROUP", "value": template_group})
+        service_template_group = service_config.get("templateGroup")
+        if service_template_group is not None:
+            service_template_group = render.render_template(str(service_template_group), variables, task_definition_config_env)
+            env.append({"name": "TEMPLATE_GROUP", "value": service_template_group})
 
         desired_count = service_config.get("desiredCount")
         if desired_count is None:

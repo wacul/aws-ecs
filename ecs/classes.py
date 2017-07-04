@@ -4,9 +4,11 @@ import enum
 class ProcessMode(enum.Enum):
     deployService = 0
     checkDeployService = 1
-    runTask = 6
     waitForStable = 7
     checkServiceAndTask = 8
+    checkDeployScheduledTask = 11
+    checkScheduledTask = 12
+    deployScheduledTask = 13
 
 
 class ProcessStatus(enum.Enum):

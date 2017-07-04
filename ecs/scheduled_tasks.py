@@ -34,7 +34,7 @@ class TaskEnvironment(object):
                 "task definition is lack of environment.\ntask definition:\n{task_definition}"
                     .format(task_definition=task_definition))
 
-        self.__environment = None
+        self.environment = None
         self.__cluster_name = None
         self.__service_group = None
         self.__template_group = None
@@ -43,7 +43,7 @@ class TaskEnvironment(object):
         self.__placement_strategy = None
         for task_environment in task_environment_list:
             if task_environment['name'] == 'ENVIRONMENT':
-                self.__environment = task_environment['value']
+                self.environment = task_environment['value']
             if task_environment['name'] == 'CLUSTER_NAME':
                 self.__cluster_name = task_environment['value']
             elif task_environment['name'] == 'SERVICE_GROUP':
@@ -52,7 +52,7 @@ class TaskEnvironment(object):
                 self.__template_group = task_environment['value']
             elif task_environment['name'] == 'TASK_COUNT':
                 self.__task_count = int(task_environment['value'])
-        if self.__environment is None:
+        if self.environment is None:
             raise EnvironmentValueNotFoundException(
                 "task definition is lack of environment `ENVIRONMENT`.\ntask definition:\n{task_definition}"
                .format(task_definition=task_definition))
