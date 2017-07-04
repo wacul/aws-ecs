@@ -31,7 +31,8 @@ class TaskEnvironment(object):
             task_environment_list = task_definition['containerDefinitions'][0]['environment']
         except:
             raise EnvironmentValueNotFoundException(
-                f"task definition is lack of environment.\ntask definition:\n{task_definition}")
+                "task definition is lack of environment.\ntask definition:\n{task_definition}"
+                    .format(task_definition=task_definition))
 
         self.__environment = None
         self.__cluster_name = None
@@ -53,13 +54,16 @@ class TaskEnvironment(object):
                 self.__task_count = int(task_environment['value'])
         if self.__environment is None:
             raise EnvironmentValueNotFoundException(
-                f"task definition is lack of environment `ENVIRONMENT`.\ntask definition:\n{task_definition}")
+                "task definition is lack of environment `ENVIRONMENT`.\ntask definition:\n{task_definition}"
+               .format(task_definition=task_definition))
         elif self.__cluster_name is None:
             raise EnvironmentValueNotFoundException(
-                f"task definition is lack of environment `CLUSTER_NAME`.\ntask definition:\n{task_definition}")
+                "task definition is lack of environment `CLUSTER_NAME`.\ntask definition:\n{task_definition}"
+                .format(task_definition=task_definition))
         elif self.__task_count is None:
             raise EnvironmentValueNotFoundException(
-                f"task definition is lack of environment `TASK_COUNT`.\ntask definition:\n{task_definition}")
+                "task definition is lack of environment `TASK_COUNT`.\ntask definition:\n{task_definition}"
+                .format(task_definition=task_definition))
 
 
 class ScheduledTask(object):
@@ -68,7 +72,8 @@ class ScheduledTask(object):
         self.family = task_definition.get('family')
         if self.family is None:
             raise EnvironmentValueNotFoundException(
-                f"task definition parameter `family` no found.\ntask definition:\n{task_definition}")
+                "task definition parameter `family` no found.\ntask definition:\n{task_definition}"
+                    .format(task_definition=task_definition))
 
         self.task_environment = TaskEnvironment(task_definition)
         self.target_arn = target_arn
@@ -141,7 +146,8 @@ def get_scheduled_task_list(services_config,
 
         cluster = service_config.get("cluster")
         if cluster is None:
-            raise ParameterNotFoundException(f"Service `{task_name}` requires parameter `cluster`")
+            raise ParameterNotFoundException("Service `{task_name}` requires parameter `cluster`"
+                                             .format(task_name=task_name))
         cluster = render.render_template(str(cluster), variables, task_definition_config_env)
         env.append({"name": "CLUSTER_NAME", "value": cluster})
 
@@ -157,12 +163,14 @@ def get_scheduled_task_list(services_config,
 
         task_count = service_config.get("taskCount")
         if task_count is None:
-            raise ParameterNotFoundException(f"Scheduled Task `{task_name}` requires parameter `desiredCount`")
+            raise ParameterNotFoundException("Scheduled Task `{task_name}` requires parameter `desiredCount`"
+                                             .format(task_name=task_name))
         task_count = render.render_template(str(task_count), variables, task_definition_config_env)
         try:
             int(task_count)
         except ValueError:
-            raise ParameterInvalidException(f"Scheduled Task `{task_name}` parameter `taskCount` is int")
+            raise ParameterInvalidException("Scheduled Task `{task_name}` parameter `taskCount` is int"
+                                            .format(task_name=task_name))
         env.append({"name": "TASK_COUNT", "value": task_count})
 
         placement_strategy = service_config.get("placementStrategy")
@@ -184,13 +192,14 @@ def get_scheduled_task_list(services_config,
         task_definition_template = service_config.get("taskDefinitionTemplate")
         if task_definition_template is None:
             raise ParameterNotFoundException(
-                f"Scheduled Task `{task_name}` requires parameter `taskDefinitionTemplate`")
+                "Scheduled Task `{task_name}` requires parameter `taskDefinitionTemplate`".format(task_name=task_name))
         scheduled_task_definition_template = task_definition_template_dict.get(task_definition_template)
         if scheduled_task_definition_template is None or len(scheduled_task_definition_template) == 0:
             raise Exception("Scheduled Task '%s' taskDefinitionTemplate not found. " % task_name)
         if not isinstance(scheduled_task_definition_template, str):
             raise Exception(
-                f"Scheduled Task '{task_name}' taskDefinitionTemplate specified template value must be str. ")
+                "Scheduled Task '{task_name}' taskDefinitionTemplate specified template value must be str. "
+                    .format(task_name=task_name))
 
         try:
             task_definition_data = render.render_template(scheduled_task_definition_template, variables,
@@ -202,7 +211,8 @@ def get_scheduled_task_list(services_config,
             task_definition = json.loads(task_definition_data)
         except json.decoder.JSONDecodeError as e:
             raise Exception(
-                f"Scheduled Task `{task_name}`: {e.__class__.__name__} {e}\njson:\n{task_definition_data}")
+                "Scheduled Task `{task_name}`: {e.__class__.__name__} {e}\njson:\n{task_definition_data}"
+                    .format(task_name=task_name, e=e, task_definition_data=task_definition_data))
 
         # set parameters to docker environment
         for container_definitions in task_definition.get("containerDefinitions"):
@@ -210,7 +220,8 @@ def get_scheduled_task_list(services_config,
             if task_environment is not None:
                 if not isinstance(task_environment, list):
                     raise Exception(
-                        f"Scheduled Task '{task_name}' taskDefinitionTemplate environment value must be list. ")
+                        "Scheduled Task '{task_name}' taskDefinitionTemplate environment value must be list. "
+                            .format(task_name=task_name))
                 env.extend(task_environment)
             container_definitions["environment"] = env
 

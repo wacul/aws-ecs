@@ -4,16 +4,16 @@ import logging
 logger = logging.getLogger(__name__)
 
 
-def h1(x): print(f"\033[1m\033[4m\033[94m{x}\033[0m\n")
+def h1(x): print("\033[1m\033[4m\033[94m{x}\033[0m\n".format(x=x))
 
 
-def success(x): print(f"\033[92m* {x}\033[0m\n")
+def success(x): print("\033[92m* {x}\033[0m\n".format(x=x))
 
 
-def error(x): print(f"\033[91mx {x}\033[0m\n")
+def error(x): print("\033[91mx {x}\033[0m\n".format(x=x))
 
 
-def info(x): print(f"  {x}\n")
+def info(x): print("  {x}\n".format(x=x))
 
 
 def is_same_container_definition(a: dict, b: dict) -> bool:

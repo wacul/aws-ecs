@@ -21,7 +21,8 @@ class TaskEnvironment(object):
             task_environment_list = task_definition['containerDefinitions'][0]['environment']
         except:
             raise EnvironmentValueNotFoundException(
-                f"task definition is lack of environment.\ntask definition:\n{task_definition}")
+                "task definition is lack of environment.\ntask definition:\n{task_definition}"
+                .format(task_definition=task_definition))
 
         self.environment = None
         self.cluster_name = None
@@ -51,13 +52,16 @@ class TaskEnvironment(object):
                 self.distinct_instance = strtobool(task_environment['value'])
         if self.environment is None:
             raise EnvironmentValueNotFoundException(
-                f"task definition is lack of environment `ENVIRONMENT`.\ntask definition:\n{task_definition}")
+                "task definition is lack of environment `ENVIRONMENT`.\ntask definition:\n{task_definition}"
+                .format(task_definition=task_definition))
         elif self.cluster_name is None:
             raise EnvironmentValueNotFoundException(
-                f"task definition is lack of environment `CLUSTER_NAME`.\ntask definition:\n{task_definition}")
+                "task definition is lack of environment `CLUSTER_NAME`.\ntask definition:\n{task_definition}"
+                .format(task_definition=task_definition))
         elif self.desired_count is None:
             raise EnvironmentValueNotFoundException(
-                f"task definition is lack of environment `DESIRED_COUNT`.\ntask definition:\n{task_definition}")
+                "task definition is lack of environment `DESIRED_COUNT`.\ntask definition:\n{task_definition}"
+                .format(task_definition=task_definition))
 
 
 class DescribeService(Deploy):
@@ -127,7 +131,7 @@ class Service(Deploy):
             return "    - Container Definition is not changed."
         else:
             t = diff(ad, bd)
-            return f"    - Container is changed. Diff:\n{t}"
+            return "    - Container is changed. Diff:\n{t}".format(t=t)
 
 
 def arn_to_name(arn):
@@ -212,7 +216,7 @@ def get_service_list_yaml(
                 registrator = strtobool(registrator)
             except ValueError:
                 raise ParameterInvalidException(
-                    f"Service `{service_name}` parameter `registrator` must be bool"
+                    "Service `{service_name}` parameter `registrator` must be bool".format(service_name=service_name)
                 )
             if registrator:
                 env.append({"name": "SERVICE_NAME", "value": environment})
@@ -220,7 +224,8 @@ def get_service_list_yaml(
 
         cluster = service_config.get("cluster")
         if cluster is None:
-            raise ParameterNotFoundException(f"Service `{service_name}` requires parameter `cluster`")
+            raise ParameterNotFoundException("Service `{service_name}` requires parameter `cluster`"
+                                             .format(service_name=service_name))
         cluster = render.render_template(str(cluster), variables, task_definition_config_env)
         env.append({"name": "CLUSTER_NAME", "value": cluster})
 
@@ -236,12 +241,14 @@ def get_service_list_yaml(
 
         desired_count = service_config.get("desiredCount")
         if desired_count is None:
-            raise ParameterNotFoundException(f"Service `{service_name}` requires parameter `desiredCount`")
+            raise ParameterNotFoundException("Service `{service_name}` requires parameter `desiredCount`"
+                                             .format(service_name=service_name))
         desired_count = render.render_template(str(desired_count), variables, task_definition_config_env)
         try:
             int(desired_count)
         except ValueError:
-            raise ParameterInvalidException(f"Service `{service_name}` parameter `desiredCount` is int")
+            raise ParameterInvalidException("Service `{service_name}` parameter `desiredCount` is int"
+                                            .format(service_name=service_name))
         env.append({"name": "DESIRED_COUNT", "value": desired_count})
 
         minimum_healthy_percent = service_config.get("minimumHealthyPercent")
@@ -252,8 +259,8 @@ def get_service_list_yaml(
             try:
                 int(minimum_healthy_percent)
             except ValueError:
-                raise ParameterInvalidException(
-                    f"Service `{service_name}` parameter `minimumHealthyPercent` is int")
+                raise ParameterInvalidException("Service `{service_name}` parameter `minimumHealthyPercent` is int"
+                                                .format(service_name=service_name))
             env.append({"name": "MINIMUM_HEALTHY_PERCENT", "value": minimum_healthy_percent})
 
         maximum_percent = service_config.get("maximumPercent")
@@ -263,7 +270,7 @@ def get_service_list_yaml(
                 int(maximum_percent)
             except ValueError:
                 raise ParameterInvalidException(
-                    f"Service `{service_name}` parameter `maximumPercent` is int"
+                    "Service `{service_name}` parameter `maximumPercent` is int".format(service_name=service_name)
                 )
             env.append({"name": "MAXIMUM_PERCENT", "value": str(maximum_percent)})
 
@@ -273,15 +280,15 @@ def get_service_list_yaml(
             try:
                 distinct_instance = strtobool(distinct_instance)
             except ValueError:
-                raise ParameterInvalidException(
-                    f"Service `{service_name}` parameter `distinctInstance` must be bool")
+                raise ParameterInvalidException("Service `{service_name}` parameter `distinctInstance` must be bool"
+                                                .format(service_name=service_name))
             if distinct_instance:
                 env.append({"name": "DISTINCT_INSTANCE", "value": "true"})
 
         task_definition_template = service_config.get("taskDefinitionTemplate")
         if task_definition_template is None:
-            raise ParameterNotFoundException(
-                f"Service `{service_name}` requires parameter `taskDefinitionTemplate`")
+            raise ParameterNotFoundException("Service `{service_name}` requires parameter `taskDefinitionTemplate`"
+                                             .format(service_name=service_name))
         service_task_definition_template = task_definition_template_dict.get(task_definition_template)
         if service_task_definition_template is None or len(service_task_definition_template) == 0:
             raise Exception("'%s' taskDefinitionTemplate not found. " % service_name)

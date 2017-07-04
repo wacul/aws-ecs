@@ -56,7 +56,8 @@ class AwsUtils(object):
         response = self.client.describe_services(cluster=cluster, services=[service])
         failures = response.get('failures')
         if failures:
-            raise ServiceNotFoundException(f"Service '{service}' is {failures[0].get('reason')} in cluster '{cluster}'")
+            raise ServiceNotFoundException("Service '{service}' failure in cluster '{cluster}'.\nfailures:{failures}"
+                                           .format(service=service, failures=failures, cluster=cluster))
         res_services = response['services']
         # 複数同名のサービスが見つかったら、ACTIVEを返しておく
         if len(res_services) > 1:
@@ -155,7 +156,8 @@ class AwsUtils(object):
             )
         failures = response.get('failures')
         if failures:
-            raise Exception(f"Service '{service}' is {failures} in cluster '{cluster}'")
+            raise Exception("Service '{service}' is {failures} in cluster '{cluster}'"
+                            .format(service=service, failures=failures, cluster=cluster))
 
         return response['service']
 

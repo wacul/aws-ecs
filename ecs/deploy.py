@@ -36,13 +36,14 @@ class DeployProcess(Thread):
                 self.process(deploy, mode)
             except:
                 deploy.status = ProcessStatus.error
-                error(f"Unexpected error in `{deploy.name}`.\n{traceback.format_exc()}")
+                error("Unexpected error in `{deploy.name}`.\n{traceback}"
+                      .format(deploy=deploy, traceback=traceback.format_exc()))
             finally:
                 self.task_queue.task_done()
 
     def process(self, deploy, mode):
         if deploy.status == ProcessStatus.error:
-            error(f"`{deploy.name}` previous process error. skipping.")
+            error("`{deploy.name}` previous process error. skipping.".format(deploy=deploy))
             return
 
         if mode == ProcessMode.checkServiceAndTask:
@@ -63,9 +64,10 @@ class DeployProcess(Thread):
             self.__update_service(service)
         else:
             self.__create_service(service)
-        success(f"Deploy Service '{service.service_name}' succeeded.\n"
-                f"    - Registering task definition arn: '{service.task_definition_arn}'\n"
-                f"    - {service.desired_count:d} task desired")
+        success("Deploy Service '{service.service_name}' succeeded.\n"
+                "    - Registering task definition arn: '{service.task_definition_arn}'\n"
+                "    - {service.desired_count:d} task desired"
+                .format(service=service))
 
     def __register_task_definition(self, service: Service):
         # for register task rate limit
@@ -101,17 +103,17 @@ class DeployProcess(Thread):
                 describe_service.set_from_task_definition(task_definition)
                 service.set_from_describe_service(describe_service=describe_service)
             except ServiceNotFoundException:
-                error(f"Service '{service.service_name}' not Found. will be created.")
+                error("Service '{service.service_name}' not Found. will be created.".format(service=service))
                 return
         if not service.origin_service_exists:
-            error(f"Service '{service.service_name}' status not Acrive. will be recreated.")
+            error("Service '{service.service_name}' status not Acrive. will be recreated.".format(service=service))
             return
 
         checks = service.compare_container_definition()
 
-        success(
-            f"Checking service '{service.service_name}' succeeded "
-            f"({service.running_count:d} / {service.desired_count:d})\n\033[39m{checks}")
+        success("Checking service '{service.service_name}' succeeded "
+                "({service.running_count:d} / {service.desired_count:d})\n\033[39m{checks}"
+                .format(service=service, checks=checks))
 
     def __create_service(self, service: Service):
         res_service = self.awsutils.create_service(
@@ -225,7 +227,7 @@ class DeployManager(object):
         if len(self.delete_service_list) == 0:
             info("There was no service to delete.")
         for delete_service in self.delete_service_list:
-            success(f"Delete service '{delete_service.service_name}'")
+            success("Delete service '{delete_service.service_name}'".format(delete_service=delete_service))
             if not dry_run:
                 self.awsutils.delete_service(delete_service.cluster_name, delete_service.service_name)
 
@@ -233,7 +235,7 @@ class DeployManager(object):
         h1("Step: Check ECS cluster")
         for cluster_name in self.cluster_list:
             self.awsutils.describe_cluster(cluster=cluster_name)
-            success(f"Checking cluster '{cluster_name}' succeeded")
+            success("Checking cluster '{cluster_name}' succeeded".format(cluster_name=cluster_name))
 
     def check_service_and_task(self):
         h1("Step: Check ECS service and task definition")
@@ -261,7 +263,7 @@ class DeployManager(object):
                         break
             if is_delete:
                 self.delete_service_list.append(describe_service)
-        success(f"Check succeeded")
+        success("Check succeeded")
 
     def deploy_service(self):
         h1("Step: Deploy Service")
@@ -328,11 +330,13 @@ def wait_for_stable(awsutils, service: Service):
         break
     service.update(res_service)
     deregister_task_definition(awsutils, service)
-    success(f"service '{service.service_name}' ({service.running_count:d} / {service.desired_count}) update completed.")
+    success("service '{service.service_name}' ({service.running_count:d} / {service.desired_count}) update completed."
+            .format(service=service))
 
 
 def test_templates(args):
     h1("Step: Check ECS Template")
+    environment = None
     files = os.listdir(args.environment_yaml_dir)
     if files is None or len(files) == 0:
         raise Exception("environment yaml file not found.")
@@ -359,7 +363,7 @@ def test_templates(args):
                     args.template_group,
                     environment
                 )
-    success(f"Template check environment `{environment}` done.")
+    success("Template check environment `{environment}` done.".format(environment=environment))
 
 
 def get_deploy_list(
@@ -390,7 +394,7 @@ def get_deploy_list(
                 template_group=template_group,
                 environment=environment
             )
-        success(f"Template check environment `{environment}` done.")
+        success("Template check environment `{environment}` done.".format(environment=environment))
     else:
         service_list, deploy_service_list, environment =\
             get_service_list_json(
@@ -400,5 +404,5 @@ def get_deploy_list(
                 deploy_service_group,
                 template_group
             )
-        success(f"Template check environment `{environment}` done.")
+        success("Template check environment `{environment}` done.".format(environment=environment))
     return service_list, deploy_service_list, environment
