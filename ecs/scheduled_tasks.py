@@ -1,12 +1,20 @@
 # coding: utf-8
-import ecs.classes
-import ecs.deploy
-import jinja2
 import json
 import logging
+import copy
+import jinja2
+import enum
+from datadiff import diff
+
+import ecs.classes
 import render
+from ecs.utils import adjust_container_definition, is_same_container_definition
+
+from ecs.classes import Deploy, DeployTargetType
 
 logger = logging.getLogger(__name__)
+
+scheduled_task_managed_description = "MANAGED BY TASK MANAGER"
 
 
 class ParameterNotFoundException(Exception):
@@ -25,6 +33,19 @@ class EnvironmentValueNotFoundException(Exception):
     pass
 
 
+class CloudWatchEventState(enum.Enum):
+    enabled = 'ENABLED'
+    disabled = 'DISABLED'
+
+    @staticmethod
+    def get_state(state: str):
+        if state == CloudWatchEventState.enabled.value:
+            return CloudWatchEventState.enabled
+        elif state == CloudWatchEventState.disabled.value:
+            return CloudWatchEventState.disabled
+        raise Exception('CloudWatch Event no such state {state}'.format(state=state))
+
+
 class TaskEnvironment(object):
     def __init__(self, task_definition: dict) -> None:
         try:
@@ -32,69 +53,124 @@ class TaskEnvironment(object):
         except:
             raise EnvironmentValueNotFoundException(
                 "task definition is lack of environment.\ntask definition:\n{task_definition}"
-                    .format(task_definition=task_definition))
+                .format(task_definition=task_definition))
 
         self.environment = None
-        self.__cluster_name = None
-        self.__service_group = None
-        self.__template_group = None
-        self.__task_count = None
-        self.__spot_fleet_id = None
-        self.__placement_strategy = None
+        self.cluster_name = None
+        self.service_group = None
+        self.template_group = None
+        self.task_count = None
+        self.placement_strategy = None
         for task_environment in task_environment_list:
             if task_environment['name'] == 'ENVIRONMENT':
                 self.environment = task_environment['value']
             if task_environment['name'] == 'CLUSTER_NAME':
-                self.__cluster_name = task_environment['value']
+                self.cluster_name = task_environment['value']
             elif task_environment['name'] == 'SERVICE_GROUP':
-                self.__service_group = task_environment['value']
+                self.service_group = task_environment['value']
             elif task_environment['name'] == 'TEMPLATE_GROUP':
-                self.__template_group = task_environment['value']
+                self.template_group = task_environment['value']
             elif task_environment['name'] == 'TASK_COUNT':
-                self.__task_count = int(task_environment['value'])
+                self.task_count = int(task_environment['value'])
+            elif task_environment['name'] == 'TARGET_LAMBDA_ARN':
+                self.target_lambda_arn = task_environment['value']
         if self.environment is None:
             raise EnvironmentValueNotFoundException(
                 "task definition is lack of environment `ENVIRONMENT`.\ntask definition:\n{task_definition}"
-               .format(task_definition=task_definition))
-        elif self.__cluster_name is None:
+                .format(task_definition=task_definition))
+        elif self.cluster_name is None:
             raise EnvironmentValueNotFoundException(
                 "task definition is lack of environment `CLUSTER_NAME`.\ntask definition:\n{task_definition}"
                 .format(task_definition=task_definition))
-        elif self.__task_count is None:
+        elif self.task_count is None:
             raise EnvironmentValueNotFoundException(
                 "task definition is lack of environment `TASK_COUNT`.\ntask definition:\n{task_definition}"
                 .format(task_definition=task_definition))
+        elif self.target_lambda_arn is None:
+            raise EnvironmentValueNotFoundException(
+                "task definition is lack of environment `TARGET_LAMBDA_ARN`.\ntask definition:\n{task_definition}"
+                .format(task_definition=task_definition))
 
 
-class ScheduledTask(object):
-    def __init__(self, task_definition, target_arn, schedule_expression, placement_strategy):
+class CloudwatchEventRule(Deploy):
+    def __init__(self, rule: dict):
+        self.name = rule['Name']
+        self.arn = rule['Arn']
+        self.state = CloudWatchEventState.get_state(rule['State'])
+        self.description = rule['Description']
+        self.scheduled_expression = rule['ScheduleExpression']
+
+        self.task_definition = None
+        self.task_definition_arn = None
+        self.task_environment = None
+        self.family = None
+
+        super().__init__(self.name, target_type=DeployTargetType.scheduled_task)
+
+    def set_from_task_definition(self, task_definition: dict):
+        self.task_definition = task_definition
+        self.task_definition_arn = task_definition.get('taskDefinitionArn')
+        self.task_environment = TaskEnvironment(task_definition)
+        self.family = task_definition['family']
+
+
+class ScheduledTask(Deploy):
+    def __init__(self, task_definition, target_lambda_arn, schedule_expression, placement_strategy):
         self.task_definition = task_definition
         self.family = task_definition.get('family')
         if self.family is None:
             raise EnvironmentValueNotFoundException(
                 "task definition parameter `family` no found.\ntask definition:\n{task_definition}"
-                    .format(task_definition=task_definition))
+                .format(task_definition=task_definition))
 
         self.task_environment = TaskEnvironment(task_definition)
-        self.target_arn = target_arn
+        self.target_lambda_arn = target_lambda_arn
         self.schedule_expression = schedule_expression
         self.placement_strategy = placement_strategy
 
         self.status = ecs.classes.ProcessStatus.normal
 
+        self.state = CloudWatchEventState.enabled
+        self.task_exists = False
+        self.origin_task_definition_arn = None
+        self.origin_task_definition = None
+        self.origin_task_environment = None
+        self.task_definition_arn = None
+        self.is_same_task_definition = False
 
-def __deploy_task_list(task_list, deploy_service_group, template_group):
-    if deploy_service_group:
+        super().__init__(self.family, target_type=DeployTargetType.scheduled_task)
+
+    def set_from_cloudwatch_event_rule(self, cloudwatch_event_rule: CloudwatchEventRule):
+        self.origin_task_definition = cloudwatch_event_rule.task_definition
+        self.origin_task_definition_arn = cloudwatch_event_rule.task_definition_arn
+        self.origin_task_environment = cloudwatch_event_rule.task_environment
+        self.state = cloudwatch_event_rule.state
+        self.task_exists = True
+
+    def compare_container_definition(self):
+        a = self.origin_task_definition['containerDefinitions']
+        b = self.task_definition['containerDefinitions']
+        ad = adjust_container_definition(a)
+        bd = adjust_container_definition(b)
+        self.is_same_task_definition = is_same_container_definition(ad, bd)
+        if self.is_same_task_definition:
+            self.task_definition_arn = self.origin_task_definition_arn
+            return "    - Container Definition is not changed."
+        else:
+            t = diff(ad, bd)
+            return "    - Container is changed. Diff:\n{t}".format(t=t)
+
+
+def get_deploy_scheduled_task_list(task_list, deploy_service_group, template_group):
+    if deploy_service_group is not None:
         deploy_service_list = list(filter(
             lambda service: service.task_environment.service_group == deploy_service_group, task_list))
     else:
-        deploy_service_list = task_list
+        deploy_service_list = copy.copy(task_list)
 
-    if template_group:
+    if template_group is not None:
         deploy_service_list = list(filter(
             lambda service: service.task_environment.template_group == template_group, deploy_service_list))
-    if len(deploy_service_list) == 0:
-        raise Exception("Deployment target service not found.")
 
     return deploy_service_list
 
@@ -127,11 +203,11 @@ def __get_variables(task_name, base_service_config, environment_config):
 def get_scheduled_task_list(services_config,
                             environment_config,
                             task_definition_config_env,
-                            deploy_service_group,
-                            template_group,
                             environment):
-
-    scheduled_tasks = services_config["scheduledTasks"]
+    try:
+        scheduled_tasks = services_config["scheduledTasks"]
+    except KeyError:
+        return []
     task_definition_template_dict = services_config["taskDefinitionTemplates"]
 
     scheduled_task_list = []
@@ -176,18 +252,30 @@ def get_scheduled_task_list(services_config,
         placement_strategy = service_config.get("placementStrategy")
         if placement_strategy is not None:
             placement_strategy = render.render_template(str(placement_strategy), variables, task_definition_config_env)
+        env.append({"name": "PLACEMENT_STRATEGY", "value": placement_strategy})
 
-        schedule_expression = service_config.get("scheduleExpression")
-        if schedule_expression is not None:
-            schedule_expression = render.render_template(
-                str(schedule_expression),
-                variables,
-                task_definition_config_env
-            )
+        cloudwatch_event = service_config.get('cloudwatchEvent')
+        if cloudwatch_event is None:
+            raise ParameterNotFoundException("Scheduled Task `{task_name}` requires parameter `cloudwatchEvent`"
+                                             .format(task_name=task_name))
+        schedule_expression = cloudwatch_event.get("scheduleExpression")
+        if schedule_expression is None:
+            raise ParameterNotFoundException("Scheduled Task `{task_name}` requires parameter "
+                                             "`cloudwatchEvent.scheduleExpression`"
+                                             .format(task_name=task_name))
+        schedule_expression = render.render_template(
+            str(schedule_expression),
+            variables,
+            task_definition_config_env
+        )
 
-        target_arn = service_config.get("targetArn")
-        if target_arn is not None:
-            target_arn = render.render_template(str(target_arn), variables, task_definition_config_env)
+        target_lambda_arn = cloudwatch_event.get("targetLambdaArn")
+        if schedule_expression is None:
+            raise ParameterNotFoundException("Scheduled Task `{task_name}` requires parameter "
+                                             "`cloudwatchEvent.targetLambdaArn`"
+                                             .format(task_name=task_name))
+        target_lambda_arn = render.render_template(str(target_lambda_arn), variables, task_definition_config_env)
+        env.append({"name": "TARGET_LAMBDA_ARN", "value": target_lambda_arn})
 
         task_definition_template = service_config.get("taskDefinitionTemplate")
         if task_definition_template is None:
@@ -199,7 +287,7 @@ def get_scheduled_task_list(services_config,
         if not isinstance(scheduled_task_definition_template, str):
             raise Exception(
                 "Scheduled Task '{task_name}' taskDefinitionTemplate specified template value must be str. "
-                    .format(task_name=task_name))
+                .format(task_name=task_name))
 
         try:
             task_definition_data = render.render_template(scheduled_task_definition_template, variables,
@@ -212,7 +300,7 @@ def get_scheduled_task_list(services_config,
         except json.decoder.JSONDecodeError as e:
             raise Exception(
                 "Scheduled Task `{task_name}`: {e.__class__.__name__} {e}\njson:\n{task_definition_data}"
-                    .format(task_name=task_name, e=e, task_definition_data=task_definition_data))
+                .format(task_name=task_name, e=e, task_definition_data=task_definition_data))
 
         # set parameters to docker environment
         for container_definitions in task_definition.get("containerDefinitions"):
@@ -221,17 +309,16 @@ def get_scheduled_task_list(services_config,
                 if not isinstance(task_environment, list):
                     raise Exception(
                         "Scheduled Task '{task_name}' taskDefinitionTemplate environment value must be list. "
-                            .format(task_name=task_name))
+                        .format(task_name=task_name))
                 env.extend(task_environment)
             container_definitions["environment"] = env
 
         scheduled_task = ScheduledTask(
             task_definition=task_definition,
-            target_arn=target_arn,
+            target_lambda_arn=target_lambda_arn,
             schedule_expression=schedule_expression,
             placement_strategy=placement_strategy
         )
         scheduled_task_list.append(scheduled_task)
 
-    deploy_task_list = __deploy_task_list(scheduled_task_list, deploy_service_group, template_group)
-    return scheduled_task_list, deploy_task_list, environment
+    return scheduled_task_list

@@ -29,7 +29,7 @@ or
 * `task-definition-template-dir` (required): ecs task-definition jinja2 template files directory. all files below directory is loaded.
 * `task-definition-json` (required): jinja2 template input json data file. 
 
-```yml
+```:yaml
 deploy-yaml:
   steps:
     - wacul/aws-ecs:
@@ -53,12 +53,15 @@ deploy-json:
       template-group: back
 
 ```
+
 ### Yaml Template examples
 
 #### environment-yaml `infra/conf/dev.yml`
 `environment` parameter is required. then set docker environment `ENVIRONMENT`.
 and  override services paramters.
-```
+
+```yaml
+
 ---
 environment: dev
 cpu: 64
@@ -72,31 +75,50 @@ services:
       cpu: 96
       memoryReservation: 96
 ```
-#### service-yaml `infra/services.yml`
 
+#### service-and-scheduled-task-yaml `infra/services.yml`
+
+##### serice parameters
 
 * `cluster` (required): deployment ecs cluster name. then set docker environment `CLUSTER_NAME`.
 * `templateGroup` (optional): refer to wercker.yml's `template-group`. only same `template-group` is . then set ecs service's environment `TEMPLATE_GROUP`.
 * `serviceGroup` (optional): refer to wercker.yml's `deploy-service-group`. only same `service-group` is deployed. then set ecs service's environment `SERVICE_GROUP`.
 * `desiredCount` (required): ecs service's desired count. then set ecs service's environment `DESIRED_COUNT`.
 * `minimumHealthyPercent` (optional): ecs service's minimum_healthy_percent. then set ecs service's environment `MINIMUM_HEALTHY_PERCENT`. (default: 50)
+* `cloudwatchEvent`
+  * `scheduleExpression` (required): cloudwatch event schedule expression.
+  * `targetLambdaArn` (required): cloudwatch event target lambda arn. 
+* `distinctInstance` (optional): ecs service placementConstraints type is distinctInstance. then set ecs service's environment `DISTINCT_INSTANCE`. (default: False)
+* `registrator` (optional): set `environment` for ecs service's environment `SERVICE_NAME` and set service name for ecs service's environment `SERVICE_TAGS` (default: False)
+* `taskDefinitionTemplate` (required): ecs task definition. can use jinja2 template. service name is set to `{{item}}`.
+* `vars` (optional): jinja2 template variables.
+
+##### scheduled task parameters
+
+* `cluster` (required): task run ecs cluster name. then set docker environment `CLUSTER_NAME`.
+* `templateGroup` (optional): refer to wercker.yml's `template-group`. only same `template-group` is . then set ecs service's environment `TEMPLATE_GROUP`.
+* `serviceGroup` (optional): refer to wercker.yml's `deploy-service-group`. only same `service-group` is deployed. then set ecs service's environment `SERVICE_GROUP`.
+* `taskCount` (required): ecs task run count. then set ecs service's environment `TASK_COUNT`.
+* `placementStrategy` (optional): ecs task run strategy. then set ecs service's environment `PLACEMENT_STRATEGY`.
 * `maximumPercent` (optional): ecs service's maximum_percent. then set ecs service's environment `MAXIMUM_PERCENT`. (default: 200)
 * `distinctInstance` (optional): ecs service placementConstraints type is distinctInstance. then set ecs service's environment `DISTINCT_INSTANCE`. (default: False)
 * `registrator` (optional): set `environment` for ecs service's environment `SERVICE_NAME` and set service name for ecs service's environment `SERVICE_TAGS` (default: False)
 * `taskDefinitionTemplate` (required): ecs task definition. can use jinja2 template. service name is set to `{{item}}`.
 * `vars` (optional): jinja2 template variables.
 
-```
+```yaml
+
 ---
 
 aliases:
-  - &cluster_app app
+  - &cluster_applications app
+  - &cluster_batch batch
 
 services:
   web:
-    cluster: *cluster_app
+    cluster: *cluster_applications
     serviceGroup: web
-    templateGroup: web-repository
+    templateGroup: repo_name
     desiredCount: 2
     minimumHealthyPercent: 50
     maximumPercent: 100
@@ -104,11 +126,26 @@ services:
     distinctInstance: true
     taskDefinitionTemplate: default
     vars:
-      startupScript: ./infra/script/startup_web.sh
+      startupScript: ./script/startup_web.sh
       portMappings:
         - hostPort: 0
           containerPort: 3000
           protocol: tcp
+scheduledTasks:
+  batch:
+    cluster: *cluster_batch
+    serviceGroup: batch
+    templateGroup: repo_name
+    taskCount: 1
+    placementStrategy: '[{"field": "memory", "type": "binpack"}]'
+    cloudwatchEvent:
+      scheduleExpression: rate(5 minutes)
+      targetLambdaArn: arn:aws:lambda:us-east-1:111111111111:function:lambda_name
+    taskDefinitionTemplate: default
+    vars:
+      cpu: 64
+      memory: 64
+      startupScript: ./script/run.sh
 
 taskDefinitionTemplates:
   default: |
@@ -119,7 +156,7 @@ taskDefinitionTemplates:
           "name": "{{environment}}-{{item}}",
           "cpu": {{cpu}},
           "memoryReservation": {{memoryReservation}},
-          "image": "quay.io/wacul/ai-analyst-ocha:{{environment}}{% if environment == 'production' %}-{{serviceGroup}}{% endif %}",
+          "image": "mydomain/myimage:{{environment}}{% if environment == 'production' %}-{{serviceGroup}}{% endif %}",
           "command": [
             "{{startupScript}}",
             "{{conf}}"

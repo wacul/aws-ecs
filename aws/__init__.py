@@ -1,9 +1,18 @@
 # coding: utf-8
 from boto3 import Session
-from ecs.service import Service
+from ecs.scheduled_tasks import ScheduledTask
+from botocore.exceptions import ClientError
 
 
 class ServiceNotFoundException(Exception):
+    pass
+
+
+class CloudwatchEventRuleNotFoundException(Exception):
+    pass
+
+
+class TaskDefinitionNotFoundException(Exception):
     pass
 
 
@@ -12,6 +21,7 @@ class AwsUtils(object):
         session = Session(aws_access_key_id=access_key, aws_secret_access_key=secret_key, region_name=region)
         self.client = session.client('ecs')
         self.cloudwatch_event = session.client('events')
+        self.aws_lambda = session.client('lambda')
 
     def describe_cluster(self, cluster):
         """
@@ -279,11 +289,80 @@ class AwsUtils(object):
         waiter.wait(cluster=cluster_name, services=[service_name])
         return self.describe_service(cluster=cluster_name, service=service_name)
 
-    def create_scheduled_task(self, schedule_expression :str, task_name :str, description: str, target_arn: str) -> str:
-        response = self.cloudwatch_event.put_rule(Name=task_name,
-                                                  ScheduleExpression=schedule_expression,
-                                                  Description=description)
-        rule_arn = response['RuleArn']
+    def create_scheduled_task(self, scheduled_task: ScheduledTask, description: str):
+        res_p = self.cloudwatch_event.put_rule(
+            Name=scheduled_task.family,
+            ScheduleExpression=scheduled_task.schedule_expression,
+            Description=description,
+            State=scheduled_task.state.value
+        )
+        event_arn = res_p['RuleArn']
+        targets = [{'Id': scheduled_task.name, 'Arn': scheduled_task.target_lambda_arn}]
+        self.cloudwatch_event.put_targets(Rule=scheduled_task.name, Targets=targets)
+        try:
+            self.aws_lambda.get_policy(FunctionName=scheduled_task.target_lambda_arn)
+        except ClientError as e:
+            if e.response['Error']['Code'] == 'ResourceNotFoundException':
+                self.aws_lambda.add_permission(
+                    FunctionName=scheduled_task.target_lambda_arn,
+                    StatementId=scheduled_task.family,
+                    Action="lambda:*",
+                    Principal="events.amazonaws.com",
+                    SourceArn=event_arn
+                )
+            else:
+                raise
 
-        targets = [{'Id': task_name, 'Arn': target_arn}]
-        self.cloudwatch_event.put_tagets(Rule=rule_arn, Targets=targets)
+    def list_cloudwatch_event_rules(self) -> list:
+        response = self.cloudwatch_event.list_rules()
+        cloud_watch_event_rules = response['Rules']
+        while 'nextToken' in response:
+            response = self.cloudwatch_event.list_rules(nextToken=response['nextToken'])
+            cloud_watch_event_rules.extend(response['Rules'])
+        return cloud_watch_event_rules
+
+    def delete_scheduled_task(self, name: str, target_arn: str):
+        self.aws_lambda.remove_permission(
+            FunctionName=target_arn,
+            StatementId=name
+        )
+        self.cloudwatch_event.remove_target(Rule=name, Ids=[name])
+        self.cloudwatch_event.delete_rule(Name=name)
+
+    def describe_rule(self, name: str) -> dict:
+        try:
+            response = self.cloudwatch_event.describe_rule(Name=name)
+        except ClientError as e:
+            if e.response['Error']['Code'] == 'ResourceNotFoundException':
+                raise CloudwatchEventRuleNotFoundException()
+            else:
+                raise
+        return response
+
+    def disable_rule(self, name: str):
+        self.cloudwatch_event.disable_rule(Name=name)
+
+    def list_running_tasks(self, cluster: str, family: str) -> list:
+        response = self.client.list_tasks(cluster=cluster, family=family, desiredStatus='RUNNING')
+
+        failures = response.get('failures')
+        if failures:
+            raise Exception('list_tasks failre. description: {failures}'.format(failures=failures))
+
+        return response.get('taskArns')
+
+    def stop_task(self, cluster: str, task_arn: str):
+        self.client.stop_task(cluster=cluster, task=task_arn, reason='aws ecs deploy')
+
+    def wait_for_task_stopped(self, cluster: str, tasks: list):
+        # Waiting for the service update is done
+        waiter = self.client.get_waiter('tasks_stopped')
+        waiter.wait(cluster=cluster, tasks=tasks)
+
+    def list_clusters(self) -> list:
+        response = self.client.list_clusters()
+        cluster_arns = response['clusterArns']
+        while 'nextToken' in response:
+            response = self.client.list_rules(nextToken=response['nextToken'])
+            cluster_arns.extend(response['clusterArns'])
+        return cluster_arns

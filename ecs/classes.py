@@ -5,10 +5,11 @@ class ProcessMode(enum.Enum):
     deployService = 0
     checkDeployService = 1
     waitForStable = 7
-    checkServiceAndTask = 8
+    fetchServices = 8
     checkDeployScheduledTask = 11
-    checkScheduledTask = 12
+    fetchCloudwatchEvents = 12
     deployScheduledTask = 13
+    stopScheduledTask = 14
 
 
 class ProcessStatus(enum.Enum):
@@ -19,7 +20,8 @@ class ProcessStatus(enum.Enum):
 class DeployTargetType(enum.Enum):
     service = 0
     service_describe = 1
-    task = 2
+    scheduled_task = 2
+    cloudwatch_event = 3
 
 
 class Deploy(object):

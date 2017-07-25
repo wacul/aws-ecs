@@ -155,8 +155,6 @@ def get_deploy_service_list(service_list, deploy_service_group, template_group):
             if service.task_environment.template_group == template_group:
                 slist.append(service)
         deploy_service_list = slist
-    if len(deploy_service_list) == 0:
-        raise Exception("Deployment target service not found.")
 
     return deploy_service_list
 
@@ -194,7 +192,11 @@ def get_service_list_yaml(
         task_definition_config_env,
         environment
 ) -> list:
-    services = services_config["services"]
+    try:
+        services = services_config["services"]
+    except KeyError:
+        return []
+
     task_definition_template_dict = services_config["taskDefinitionTemplates"]
 
     service_list = []
