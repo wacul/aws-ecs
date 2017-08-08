@@ -355,16 +355,19 @@ class DeployManager(object):
 
     def fetch_ecs_information(self):
         h1("Step: Fetch ECS Information")
-        describe_service_list = fetch_aws_service(cluster_list=self.cluster_list, awsutils=self.awsutils)
-        for s in describe_service_list:
-            self.task_queue.put([s, ProcessMode.fetchServices])
+        describe_service_list = []
+        if len(self.service_list) > 0:
+            describe_service_list = fetch_aws_service(cluster_list=self.cluster_list, awsutils=self.awsutils)
+            for s in describe_service_list:
+                self.task_queue.put([s, ProcessMode.fetchServices])
         cloud_watch_rule_list = []
-        rules = self.awsutils.list_cloudwatch_event_rules()
-        for r in rules:
-            if r.get('Description') ==  scheduled_task_managed_description:
-                c = CloudwatchEventRule(r)
-                cloud_watch_rule_list.append(c)
-                self.task_queue.put([c, ProcessMode.fetchCloudwatchEvents])
+        if len(self.scheduled_task_list) > 0:
+            rules = self.awsutils.list_cloudwatch_event_rules()
+            for r in rules:
+                if r.get('Description') == scheduled_task_managed_description:
+                    c = CloudwatchEventRule(r)
+                    cloud_watch_rule_list.append(c)
+                    self.task_queue.put([c, ProcessMode.fetchCloudwatchEvents])
         while self.task_queue.qsize() > 0:
             print('.', end='', flush=True)
             time.sleep(3)
