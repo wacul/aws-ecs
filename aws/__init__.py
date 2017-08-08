@@ -322,11 +322,17 @@ class AwsUtils(object):
         return cloud_watch_event_rules
 
     def delete_scheduled_task(self, name: str, target_arn: str):
-        self.aws_lambda.remove_permission(
-            FunctionName=target_arn,
-            StatementId=name
-        )
-        self.cloudwatch_event.remove_target(Rule=name, Ids=[name])
+        try:
+            self.aws_lambda.remove_permission(
+                FunctionName=target_arn,
+                StatementId=name
+            )
+        except ClientError as e:
+            if e.response['Error']['Code'] == 'ResourceNotFoundException':
+                pass
+            else:
+                raise
+        self.cloudwatch_event.remove_targets(Rule=name, Ids=[name])
         self.cloudwatch_event.delete_rule(Name=name)
 
     def describe_rule(self, name: str) -> dict:
