@@ -431,8 +431,11 @@ class DeployManager(object):
         error_service_list = list(filter(
             lambda service: service.status == ProcessStatus.error, self.deploy_service_list
         ))
-        # サービスでエラーが一個でもあれば失敗としておく
-        if len(error_service_list) > 0:
+        error_scheduled_task_list = list(filter(
+            lambda task: task.status == ProcessStatus.error, self.deploy_scheduled_task_list
+        ))
+        # エラーが一個でもあれば失敗としておく
+        if len(error_service_list) > 0 or len(error_scheduled_task_list) > 0:
             sys.exit(1)
         if self.error:
             sys.exit(1)
