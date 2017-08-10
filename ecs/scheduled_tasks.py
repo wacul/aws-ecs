@@ -333,5 +333,6 @@ def get_scheduled_task_list(services_config,
             schedule_expression=schedule_expression,
             placement_strategy=placement_strategy
         )
+        scheduled_task_list.append(scheduled_task)
 
     return scheduled_task_list
