@@ -91,6 +91,7 @@ services:
 * `distinctInstance` (optional): ecs service placementConstraints type is distinctInstance. then set ecs service's environment `DISTINCT_INSTANCE`. (default: False)
 * `registrator` (optional): set `environment` for ecs service's environment `SERVICE_NAME` and set service name for ecs service's environment `SERVICE_TAGS` (default: False)
 * `taskDefinitionTemplate` (required): ecs task definition. can use jinja2 template. service name is set to `{{item}}`.
+* `disabled` (optional): if parameter is true, service is disabled. (default: False)
 * `vars` (optional): jinja2 template variables.
 
 ##### scheduled task parameters
@@ -104,6 +105,7 @@ services:
 * `distinctInstance` (optional): ecs service placementConstraints type is distinctInstance. then set ecs service's environment `DISTINCT_INSTANCE`. (default: False)
 * `registrator` (optional): set `environment` for ecs service's environment `SERVICE_NAME` and set service name for ecs service's environment `SERVICE_TAGS` (default: False)
 * `taskDefinitionTemplate` (required): ecs task definition. can use jinja2 template. service name is set to `{{item}}`.
+* `disabled` (optional): if parameter is true, scheduled task is disabled. (default: False)
 * `vars` (optional): jinja2 template variables.
 
 ```yaml
@@ -206,7 +208,6 @@ this script use environment variables below:
 * `MINIMUM_HEALTHY_PERCENT` (optional): ecs service's minimum_healthy_percent. (default: 50)
 * `MAXIMUM_PERCENT` (optional): ecs service's maximum_percent. (default: 200)
 * `DISTINCT_INSTANCE` (optional): ecs service placementConstraints type is distinctInstance (default: False)
-
 
 ```
 [

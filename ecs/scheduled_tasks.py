@@ -5,11 +5,11 @@ import copy
 import jinja2
 import enum
 from datadiff import diff
+from distutils.util import strtobool
 
 import ecs.classes
 import render
 from ecs.utils import adjust_container_definition, is_same_container_definition
-
 from ecs.classes import Deploy, DeployTargetType
 
 logger = logging.getLogger(__name__)
@@ -213,31 +213,33 @@ def get_scheduled_task_list(services_config,
     scheduled_task_list = []
     for task_name in scheduled_tasks:
         # 設定値と変数を取得
-        service_config, variables = __get_variables(task_name=task_name,
-                                                    base_service_config=scheduled_tasks.get(task_name),
-                                                    environment_config=environment_config)
+        task_config, variables = __get_variables(
+            task_name=task_name,
+            base_service_config=scheduled_tasks.get(task_name),
+            environment_config=environment_config
+        )
 
         # parameter check & build docker environment
         env = [{"name": "ENVIRONMENT", "value": environment}]
 
-        cluster = service_config.get("cluster")
+        cluster = task_config.get("cluster")
         if cluster is None:
             raise ParameterNotFoundException("Service `{task_name}` requires parameter `cluster`"
                                              .format(task_name=task_name))
         cluster = render.render_template(str(cluster), variables, task_definition_config_env)
         env.append({"name": "CLUSTER_NAME", "value": cluster})
 
-        service_group = service_config.get("serviceGroup")
+        service_group = task_config.get("serviceGroup")
         if service_group is not None:
             service_group = render.render_template(str(service_group), variables, task_definition_config_env)
             env.append({"name": "SERVICE_GROUP", "value": service_group})
 
-        template_group = service_config.get("templateGroup")
+        template_group = task_config.get("templateGroup")
         if template_group is not None:
             template_group = render.render_template(str(template_group), variables, task_definition_config_env)
             env.append({"name": "TEMPLATE_GROUP", "value": template_group})
 
-        task_count = service_config.get("taskCount")
+        task_count = task_config.get("taskCount")
         if task_count is None:
             raise ParameterNotFoundException("Scheduled Task `{task_name}` requires parameter `desiredCount`"
                                              .format(task_name=task_name))
@@ -249,12 +251,12 @@ def get_scheduled_task_list(services_config,
                                             .format(task_name=task_name))
         env.append({"name": "TASK_COUNT", "value": task_count})
 
-        placement_strategy = service_config.get("placementStrategy")
+        placement_strategy = task_config.get("placementStrategy")
         if placement_strategy is not None:
             placement_strategy = render.render_template(str(placement_strategy), variables, task_definition_config_env)
         env.append({"name": "PLACEMENT_STRATEGY", "value": placement_strategy})
 
-        cloudwatch_event = service_config.get('cloudwatchEvent')
+        cloudwatch_event = task_config.get('cloudwatchEvent')
         if cloudwatch_event is None:
             raise ParameterNotFoundException("Scheduled Task `{task_name}` requires parameter `cloudwatchEvent`"
                                              .format(task_name=task_name))
@@ -277,7 +279,7 @@ def get_scheduled_task_list(services_config,
         target_lambda_arn = render.render_template(str(target_lambda_arn), variables, task_definition_config_env)
         env.append({"name": "TARGET_LAMBDA_ARN", "value": target_lambda_arn})
 
-        task_definition_template = service_config.get("taskDefinitionTemplate")
+        task_definition_template = task_config.get("taskDefinitionTemplate")
         if task_definition_template is None:
             raise ParameterNotFoundException(
                 "Scheduled Task `{task_name}` requires parameter `taskDefinitionTemplate`".format(task_name=task_name))
@@ -313,12 +315,23 @@ def get_scheduled_task_list(services_config,
                 env.extend(task_environment)
             container_definitions["environment"] = env
 
+        # disabledになったらリストから外す
+        disabled = task_config.get("disabled")
+        if disabled is not None:
+            disabled = render.render_template(str(disabled), variables, task_definition_config_env)
+            try:
+                disabled = strtobool(disabled)
+            except ValueError:
+                raise ParameterInvalidException("Scheduled Task `{task_name}` parameter `disabled` must be bool"
+                                                .format(task_name=task_name))
+            if disabled:
+                continue
+
         scheduled_task = ScheduledTask(
             task_definition=task_definition,
             target_lambda_arn=target_lambda_arn,
             schedule_expression=schedule_expression,
             placement_strategy=placement_strategy
         )
-        scheduled_task_list.append(scheduled_task)
 
     return scheduled_task_list

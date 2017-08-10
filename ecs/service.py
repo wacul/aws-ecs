@@ -321,6 +321,18 @@ def get_service_list_yaml(
                 env.extend(task_environment)
             container_definitions["environment"] = env
 
+        # disabledになったらリストから外す
+        disabled = service_config.get("disabled")
+        if disabled is not None:
+            disabled = render.render_template(str(disabled), variables, task_definition_config_env)
+            try:
+                disabled = strtobool(disabled)
+            except ValueError:
+                raise ParameterInvalidException("Service `{service_name}` parameter `disabled` must be bool"
+                                                .format(service_name=service_name))
+            if disabled:
+                continue
+
         service_list.append(Service(task_definition))
 
     return service_list
