@@ -78,7 +78,7 @@ services:
 
 #### service-and-scheduled-task-yaml `infra/services.yml`
 
-##### serice parameters
+##### service parameters
 
 * `cluster` (required): deployment ecs cluster name. then set docker environment `CLUSTER_NAME`.
 * `templateGroup` (optional): refer to wercker.yml's `template-group`. only same `template-group` is . then set ecs service's environment `TEMPLATE_GROUP`.
