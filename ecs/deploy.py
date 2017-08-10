@@ -567,6 +567,7 @@ def get_deploy_list(
 
     if len(deploy_service_list) == 0 and len(deploy_scheduled_task_list) == 0:
         error("Deployment target not found.")
+        sys.exit(1)
 
     success("Template check environment `{environment}` done.".format(environment=environment))
     return service_list, deploy_service_list, scheduled_task_list, deploy_scheduled_task_list, environment

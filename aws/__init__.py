@@ -300,16 +300,16 @@ class AwsUtils(object):
         targets = [{'Id': scheduled_task.name, 'Arn': scheduled_task.target_lambda_arn}]
         self.cloudwatch_event.put_targets(Rule=scheduled_task.name, Targets=targets)
         try:
-            self.aws_lambda.get_policy(FunctionName=scheduled_task.target_lambda_arn)
+            self.aws_lambda.add_permission(
+                FunctionName=scheduled_task.target_lambda_arn,
+                StatementId=scheduled_task.family,
+                Action="lambda:*",
+                Principal="events.amazonaws.com",
+                SourceArn=event_arn
+            )
         except ClientError as e:
-            if e.response['Error']['Code'] == 'ResourceNotFoundException':
-                self.aws_lambda.add_permission(
-                    FunctionName=scheduled_task.target_lambda_arn,
-                    StatementId=scheduled_task.family,
-                    Action="lambda:*",
-                    Principal="events.amazonaws.com",
-                    SourceArn=event_arn
-                )
+            if e.response['Error']['Code'] == 'ResourceConflictException':
+                pass
             else:
                 raise
 
