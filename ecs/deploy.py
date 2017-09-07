@@ -24,11 +24,12 @@ from ecs.utils import h1, success, error, info
 
 
 class DeployProcess(Thread):
-    def __init__(self, task_queue, key, secret, region, is_service_zero_keep):
+    def __init__(self, task_queue, key, secret, region, is_service_zero_keep, is_stop_before_deploy):
         super().__init__()
         self.task_queue = task_queue
         self.awsutils = AwsUtils(access_key=key, secret_key=secret, region=region)
         self.is_service_zero_keep = is_service_zero_keep
+        self.is_stop_before_deploy = is_stop_before_deploy
 
     def run(self):
         while True:
@@ -151,7 +152,7 @@ class DeployProcess(Thread):
             self.__create_service(service)
         success("Deploy Service '{service.service_name}' succeeded.\n\033[39m"
                 "    - Registering task definition arn: '{service.task_definition_arn}'\n"
-                "    - {service.desired_count:d} task desired"
+                "    - {service.task_environment.desired_count:d} task desired"
                 .format(service=service))
 
     def fetch_service(self, describe_service: DescribeService):
@@ -215,6 +216,8 @@ class DeployProcess(Thread):
         desired_count = service.task_environment.desired_count
         # サービスのタスク数が0だったらそれを維持する
         if self.is_service_zero_keep and service.origin_desired_count == 0:
+            desired_count = 0
+        elif self.is_stop_before_deploy and service.stop_before_deploy and service.desired_count == 0:
             desired_count = 0
         res_service = self.awsutils.update_service(
             cluster=service.task_environment.cluster_name,
@@ -307,7 +310,14 @@ class DeployManager(object):
     def start_threads(self):
         # threadの開始
         for i in range(self.threads_count):
-            thread = DeployProcess(self.task_queue, self.key, self.secret, self.region, self.is_service_zero_keep)
+            thread = DeployProcess(
+                task_queue=self.task_queue,
+                key=self.key,
+                secret=self.secret,
+                region=self.region,
+                is_service_zero_keep=self.is_service_zero_keep,
+                is_stop_before_deploy=self.is_stop_before_deploy
+            )
             thread.setDaemon(True)
             thread.start()
 
