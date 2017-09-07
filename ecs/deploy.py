@@ -8,6 +8,7 @@ from multiprocessing import Queue
 from queue import Queue, Empty
 from random import randint
 from threading import Thread
+from typing import List
 
 import botocore.exceptions
 import yaml
@@ -73,6 +74,34 @@ class DeployProcess(Thread):
 
         elif mode == ProcessMode.stopScheduledTask:
             self.stop_scheduled_task(deploy)
+
+        elif mode == ProcessMode.stopBeforeDeploy:
+            self.stop_before_deploy(deploy)
+
+        elif mode == ProcessMode.startAfterDeploy:
+            self.start_after_deploy(deploy)
+
+    def stop_before_deploy(self, service: Service):
+        res_service = self.awsutils.update_service_desired_count(
+            cluster=service.task_environment.cluster_name,
+            service=service.service_name,
+            desired_count=0
+        )
+        service.update(res_service)
+        success("Stop Service '{service.service_name}' succeeded.\n\033[39m"
+                "    - {service.desired_count:d} task desired"
+                .format(service=service))
+
+    def start_after_deploy(self, service: Service):
+        res_service = self.awsutils.update_service_desired_count(
+            cluster=service.task_environment.cluster_name,
+            service=service.service_name,
+            desired_count=service.task_environment.desired_count
+        )
+        service.update(res_service)
+        success("Start Service '{service.service_name}' succeeded.\n\033[39m"
+                "    - {service.origin_desired_count:d} task desired"
+                .format(service=service))
 
     def stop_scheduled_task(self, scheduled_task: ScheduledTask):
         if not scheduled_task.task_exists:
@@ -185,7 +214,7 @@ class DeployProcess(Thread):
     def __update_service(self, service: Service):
         desired_count = service.task_environment.desired_count
         # サービスのタスク数が0だったらそれを維持する
-        if self.is_service_zero_keep and service.desired_count == 0:
+        if self.is_service_zero_keep and service.origin_desired_count == 0:
             desired_count = 0
         res_service = self.awsutils.update_service(
             cluster=service.task_environment.cluster_name,
@@ -254,6 +283,7 @@ class DeployManager(object):
                     deploy_service_group=args.deploy_service_group,
                     template_group=args.template_group
                 )
+
         self.cluster_list = self.awsutils.list_clusters()
         self.threads_count = args.threads_count
         # thread数がタスクの数を超えているなら減らす
@@ -267,6 +297,7 @@ class DeployManager(object):
         self.is_service_zero_keep = args.service_zero_keep
         self.template_group = args.template_group
         self.is_delete_unused_service = args.delete_unused_service
+        self.is_stop_before_deploy = args.stop_before_deploy
 
         self.error = False
 
@@ -292,8 +323,15 @@ class DeployManager(object):
         self.check_deploy()
 
         self.stop_scheduled_task()
+        stop_before_deploy_service_list = get_stop_beofre_deploy_list(self.service_list)
+        if self.is_stop_before_deploy:
+            self.stop_before_deploy(stop_before_deploy_service_list)
+            self.wait_for_stable(stop_before_deploy_service_list)
         self.deploy_service()
-        self.wait_for_stable()
+        self.wait_for_stable(self.deploy_service_list)
+        if self.is_stop_before_deploy:
+            self.start_after_deploy(stop_before_deploy_service_list)
+            self.wait_for_stable(stop_before_deploy_service_list)
         self.deploy_scheduled_task()
 
         self.result_check()
@@ -315,6 +353,20 @@ class DeployManager(object):
             h1("Step: Stop ECS Scheduled Task")
             for task in self.deploy_scheduled_task_list:
                 self.task_queue.put([task, ProcessMode.stopScheduledTask])
+            self.task_queue.join()
+
+    def stop_before_deploy(self, service_list: List[Service]):
+        if len(service_list) > 0:
+            h1("Step: Stop ECS Service Before Deploy")
+            for service in service_list:
+                self.task_queue.put([service, ProcessMode.stopBeforeDeploy])
+            self.task_queue.join()
+
+    def start_after_deploy(self, service_list: List[Service]):
+        if len(service_list) > 0:
+            h1("Step: Start ECS Service After Deploy")
+            for service in service_list:
+                self.task_queue.put([service, ProcessMode.startAfterDeploy])
             self.task_queue.join()
 
     def deploy_scheduled_task(self):
@@ -421,9 +473,10 @@ class DeployManager(object):
             self.task_queue.put([scheduled_task, ProcessMode.checkDeployScheduledTask])
         self.task_queue.join()
 
-    def wait_for_stable(self):
-        h1("Step: Wait for Service Status 'Stable'")
-        for service in self.deploy_service_list:
+    def wait_for_stable(self, service_list: List[Service]):
+        if len(service_list) > 0:
+            h1("Step: Wait for Service Status 'Stable'")
+        for service in service_list:
             self.task_queue.put([service, ProcessMode.waitForStable])
         self.task_queue.join()
 
@@ -439,6 +492,14 @@ class DeployManager(object):
             sys.exit(1)
         if self.error:
             sys.exit(1)
+
+
+def get_stop_beofre_deploy_list(service_list: List[Service]) -> List[Service]:
+    stop_before_deploy_list = []
+    for service in service_list:
+        if service.stop_before_deploy and service.origin_desired_count > 0:
+            stop_before_deploy_list.append(service)
+    return stop_before_deploy_list
 
 
 def deregister_task_definition(awsutils, service: Service):

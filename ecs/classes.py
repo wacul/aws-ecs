@@ -10,6 +10,8 @@ class ProcessMode(enum.Enum):
     fetchCloudwatchEvents = 12
     deployScheduledTask = 13
     stopScheduledTask = 14
+    stopBeforeDeploy = 15
+    startAfterDeploy = 16
 
 
 class ProcessStatus(enum.Enum):

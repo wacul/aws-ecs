@@ -91,15 +91,17 @@ class DescribeService(Deploy):
 
 
 class Service(Deploy):
-    def __init__(self, task_definition: dict):
+    def __init__(self, task_definition: dict, stop_before_deploy: bool):
         self.task_definition = task_definition
         self.task_environment = TaskEnvironment(task_definition)
         self.family = task_definition['family']
         self.service_name = self.family + '-service'
         self.desired_count = self.task_environment.desired_count
+        self.stop_before_deploy = stop_before_deploy
 
         self.origin_task_definition_arn = None
         self.origin_task_definition = None
+        self.origin_desired_count = 0
         self.task_definition_arn = None
         self.origin_service_exists = False
         self.is_same_task_definition = False
@@ -111,6 +113,7 @@ class Service(Deploy):
         self.origin_service_exists = describe_service.service_exists
         self.origin_task_definition = describe_service.task_definition
         self.origin_task_definition_arn = describe_service.task_definition_arn
+        self.origin_desired_count = describe_service.desired_count
         self.running_count = describe_service.running_count
         self.desired_count = describe_service.desired_count
 
@@ -181,7 +184,7 @@ def get_service_list_json(
         except json.decoder.JSONDecodeError as e:
             raise Exception("{e.__class__.__name__} {e}\njson:\n{json}".format(e=e, json=task_definitions_data))
         for t in task_definitions:
-            service_list.append(Service(t))
+            service_list.append(Service(task_definition=t, stop_before_deploy=False))
 
     return service_list
 
@@ -333,7 +336,19 @@ def get_service_list_yaml(
             if disabled:
                 continue
 
-        service_list.append(Service(task_definition))
+        # stop before deploy
+        stop_before_deploy = service_config.get("stopBeforeDeploy")
+        if stop_before_deploy is not None:
+            stop_before_deploy = render.render_template(str(stop_before_deploy), variables, task_definition_config_env)
+            try:
+                stop_before_deploy = strtobool(stop_before_deploy)
+            except ValueError:
+                raise ParameterInvalidException("Service `{service_name}` parameter `stop_before_deploy` must be bool"
+                                                .format(service_name=service_name))
+        else:
+            stop_before_deploy = False
+
+        service_list.append(Service(task_definition=task_definition, stop_before_deploy=stop_before_deploy))
 
     return service_list
 

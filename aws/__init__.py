@@ -256,6 +256,14 @@ class AwsUtils(object):
             minimum_healthy_percent=minimum_healthy_percent
         )
 
+    def update_service_desired_count(self, cluster, service, desired_count):
+        self.client.update_service(
+            cluster=cluster,
+            service=service,
+            desiredCount=desired_count
+        )
+        return self.describe_service(cluster=cluster, service=service)
+
     def update_service(
             self, cluster, service, task_definition, maximum_percent, minimum_healthy_percent, desired_count=None
     ):

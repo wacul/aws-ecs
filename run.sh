@@ -87,6 +87,9 @@ fi
 if [ "$WERCKER_AWS_ECS_DELETE_UNUSED_SERVICE" == 'false' ]; then
   NO_DELETE_UNUSED_SERVICE='--no-delete-unused-service'
 fi
+if [ "$WERCKER_AWS_ECS_STOP_BEFORE_DEPLOY" == 'false' ]; then
+  NO_STOP_BEFORE_DEPLOY='--no-stop-before-deploy'
+fi
 if [ ! -z "$WERCKER_AWS_ECS_THREADS_COUNT" ]; then
   THREADS_COUNT="--threads-count $WERCKER_AWS_ECS_THREADS_COUNT"
 fi
@@ -108,5 +111,6 @@ else
         $SERVICE_ZERO_KEEP \
         $DEPLOY_SERVICE_GROUP \
         $THREADS_COUNT \
+        $NO_STOP_BEFORE_DEPLOY \
         $TASK_DEFINITION
 fi

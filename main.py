@@ -33,6 +33,8 @@ def init():
     service_parser.add_argument('--threads-count', type=int, default=5)
     service_parser.add_argument('--service-zero-keep', dest='service_zero_keep', default=True, action='store_true')
     service_parser.add_argument('--no-service-zero-keep', dest='service_zero_keep', default=True, action='store_false')
+    service_parser.add_argument('--stop-before-deploy', dest='stop_before_deploy', default=True, action='store_true')
+    service_parser.add_argument('--no-stop-before-deploy', dest='stop_before_deploy', default=True, action='store_false')
     service_parser.add_argument('--template-group')
     service_parser.add_argument('--deploy-service-group')
     service_parser.add_argument('--delete-unused-service', dest='delete_unused_service', default=True,
