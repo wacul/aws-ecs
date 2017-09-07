@@ -11,16 +11,19 @@ The step is written in Python 3.5 and use Pip and Boto3 module.
 * `key` (optional): AWS Access Key ID
 * `secret` (optional): AWS Secret Access Key
 * `region` (optional): Region name (default: us-east-1)
-* `deploy-service-group` (optional): deployment service group. if not set, all service is deployed. deploy-service-group is setting by task-definitions environment `SERVICE_GROUP` value.
-* `delete-unused-service` (optional): If template file is deleted, then related service is deleted.  (default: true)
-* `template-group` (optional): for multiple repositories deployment. When with multiple repositories, template file is divided. Then, match between `template-group` and task-definition's environment `TEMPLATE_GROUP` is deploy and delete target.
-* `threads-count` (optional): deployment thread size. (default: 10)
-* `service-zero-keep` (optional): desired count zero's service keep service desired count. (defalut: true)
-* `test-templates` (optional): only test templates. do not deploy. (default: false)
+* `delete-unused-service` (optional): When services or scheduledTask on `services-yml` or `task-definition-template-dir` was deleted or disabled, then ecs service is deleted.  (default: true)
+* `template-group` (optional): For multiple repositories ecs cluster deployment. When delete unused service with multiple repositories deployment, service and scheduled task settings exists for each repository. Then, only matches between `template-group` and ecs task-definition's environment `TEMPLATE_GROUP` value are targeted.
+* `deploy-service-group` (optional): Only matches between `deploy-service-group` and ecs task-defintion `service-group` value on `service-yml` are deployed. If do not set `deploy-service-group` value, all service and scheduled task is deployed.
+* `threads-count` (optional): python thread size. (default: 10)
+* `service-zero-keep` (optional): when deployment, if ecs service with desired count 0, keep service desired count 0. (default: true)
 
-service and task-definition settings
+test templates
 
-* `services-yaml` (required): ecs service and task-definition.
+* `test-templates` (optional): test templates. do not deploy. (default: false)
+
+service and task-definition settings. Details are described later.
+
+* `services-yaml` (required): ecs service and task-definition settings file.
 * `environment-yaml` (required): jinja2 template input json data file. `environment:` parameter is required. only same task-definition's environment `ENVIRONMENT` service is deployed.
 * `environment-yaml-dir` : for test-templates. all files below directory is loaded.
 
@@ -30,7 +33,6 @@ or
 * `task-definition-json` (required): jinja2 template input json data file. 
 
 ```:yaml
-deploy-yaml:
   steps:
     - wacul/aws-ecs:
       key: $AWS_ACCESS_KEY_ID
@@ -38,10 +40,9 @@ deploy-yaml:
       region: $AWS_DEFAULT_REGION
       services-yaml: infra/services.yml
       environment-yaml: infra/conf/dev.yml
-      deploy-service-group: $DEPLOY_SERVICE_GROUP
-      template-group: back
-
-deploy-json:
+      deploy-service-group: group
+      template-group: repo
+# or
   steps:
     - wacul/aws-ecs:
       key: $AWS_ACCESS_KEY_ID
@@ -49,16 +50,15 @@ deploy-json:
       region: $AWS_DEFAULT_REGION
       task-definition-template-dir: infra/template/
       task-definition-config-json: infra/conf/dev.json
-      deploy-service-group: $DEPLOY_SERVICE_GROUP
-      template-group: back
-
+      deploy-service-group: group
+      template-group: repo
 ```
 
 ### Yaml Template examples
 
-#### environment-yaml `infra/conf/dev.yml`
-`environment` parameter is required. then set docker environment `ENVIRONMENT`.
-and  override services paramters.
+#### environment-yaml
+
+`environment` parameter is required. then set docker environment `ENVIRONMENT` value.
 
 ```yaml
 
@@ -76,37 +76,42 @@ services:
       memoryReservation: 96
 ```
 
-#### service-and-scheduled-task-yaml `infra/services.yml`
+#### services-yaml
 
 ##### service parameters
 
-* `cluster` (required): deployment ecs cluster name. then set docker environment `CLUSTER_NAME`.
-* `templateGroup` (optional): refer to wercker.yml's `template-group`. only same `template-group` is . then set ecs service's environment `TEMPLATE_GROUP`.
-* `serviceGroup` (optional): refer to wercker.yml's `deploy-service-group`. only same `service-group` is deployed. then set ecs service's environment `SERVICE_GROUP`.
-* `desiredCount` (required): ecs service's desired count. then set ecs service's environment `DESIRED_COUNT`.
-* `minimumHealthyPercent` (optional): ecs service's minimum_healthy_percent. then set ecs service's environment `MINIMUM_HEALTHY_PERCENT`. (default: 50)
-* `cloudwatchEvent`
-  * `scheduleExpression` (required): cloudwatch event schedule expression.
-  * `targetLambdaArn` (required): cloudwatch event target lambda arn. 
-* `distinctInstance` (optional): ecs service placementConstraints type is distinctInstance. then set ecs service's environment `DISTINCT_INSTANCE`. (default: False)
-* `registrator` (optional): set `environment` for ecs service's environment `SERVICE_NAME` and set service name for ecs service's environment `SERVICE_TAGS` (default: False)
-* `taskDefinitionTemplate` (required): ecs task definition. can use jinja2 template. service name is set to `{{item}}`.
-* `disabled` (optional): if parameter is true, service is disabled. (default: False)
-* `vars` (optional): jinja2 template variables.
+* `cluster` (required): The ecs cluster name to deploy. then set ecs task-definition environment `CLUSTER_NAME` value.
+* `templateGroup` (optional): refer to wercker.yml's `template-group`. Set ecs task-definition's environment `TEMPLATE_GROUP` value.
+* `serviceGroup` (optional): refer to wercker.yml's `deploy-service-group`. Set ecs task-definition's environment `SERVICE_GROUP` value.
+* `desiredCount` (required): Set ecs service desired count. then set ecs task-definition's environment `DESIRED_COUNT` value.
+* `minimumHealthyPercent` (optional): Set ecs service minimum_healthy_percent. then set ecs task-definition's environment `MINIMUM_HEALTHY_PERCENT` value. (default: 50)
+* `maximumPercent` (optional): Set ecs service maximum_percent. then set ecs task-definition's environment `MAXIMUM_PERCENT` value. (default: 200)
+* `distinctInstance` (optional): Set ecs service placementConstraints type to distinctInstance. then set ecs task-definition's environment `DISTINCT_INSTANCE` value. (default: False)
+* `registrator` (optional): Set ecs service environment `SERVICE_NAME` to environment parameter value and Set ecs task-definition environment `SERVICE_TAGS` value to service name. (default: False)
+* `taskDefinitionTemplate` (required): Specify ecs task-definition template name from `taskDefinitionTemplates`. service name is set to `{{item}}`.
+* `disabled` (optional): if parameter is true, scheduled task is disabled. (default: False)
+* `stopBeforeDeploy` (optional): if parameter is true, stop service before ecs service update. (default: False)
+* `vars` (optional): jinja2 template variable settings.
+
 
 ##### scheduled task parameters
 
-* `cluster` (required): task run ecs cluster name. then set docker environment `CLUSTER_NAME`.
-* `templateGroup` (optional): refer to wercker.yml's `template-group`. only same `template-group` is . then set ecs service's environment `TEMPLATE_GROUP`.
-* `serviceGroup` (optional): refer to wercker.yml's `deploy-service-group`. only same `service-group` is deployed. then set ecs service's environment `SERVICE_GROUP`.
+* `cluster` (required): The ecs cluster name to run. then set ecs task-definition environment `CLUSTER_NAME` value.
+* `templateGroup` (optional): refer to wercker.yml's `template-group`. Set ecs task-definition's environment `TEMPLATE_GROUP` value.
+* `serviceGroup` (optional): refer to wercker.yml's `deploy-service-group`. Set ecs task-definition's environment `SERVICE_GROUP` value.
+* `cloudwatchEvent`
+  * `scheduleExpression` (required): cloudwatch event schedule expression.
+  * `targetLambdaArn` (required): cloudwatch event target lambda arn. 
+* `placementStrategy` (optional): ecs task run strategy. then set ecs service environment `PLACEMENT_STRATEGY` value.
+* `taskDefinitionTemplate` (required): Specify ecs task-definition template name from `taskDefinitionTemplates`. scheduled task name is set to `{{item}}`.
 * `taskCount` (required): ecs task run count. then set ecs service's environment `TASK_COUNT`.
-* `placementStrategy` (optional): ecs task run strategy. then set ecs service's environment `PLACEMENT_STRATEGY`.
-* `maximumPercent` (optional): ecs service's maximum_percent. then set ecs service's environment `MAXIMUM_PERCENT`. (default: 200)
-* `distinctInstance` (optional): ecs service placementConstraints type is distinctInstance. then set ecs service's environment `DISTINCT_INSTANCE`. (default: False)
-* `registrator` (optional): set `environment` for ecs service's environment `SERVICE_NAME` and set service name for ecs service's environment `SERVICE_TAGS` (default: False)
-* `taskDefinitionTemplate` (required): ecs task definition. can use jinja2 template. service name is set to `{{item}}`.
-* `disabled` (optional): if parameter is true, scheduled task is disabled. (default: False)
-* `vars` (optional): jinja2 template variables.
+* `disabled` (optional): if parameter is true, service is disabled. (default: False)
+* `vars` (optional): jinja2 template variable settings.
+
+
+##### taskDefinitionTemplates
+
+Template can use jinja2 template engine. service or scheduled task name is set to `{{item}}`. 
 
 ```yaml
 
@@ -120,7 +125,7 @@ services:
   web:
     cluster: *cluster_applications
     serviceGroup: web
-    templateGroup: repo_name
+    templateGroup: repo
     desiredCount: 2
     minimumHealthyPercent: 50
     maximumPercent: 100
@@ -137,7 +142,7 @@ scheduledTasks:
   batch:
     cluster: *cluster_batch
     serviceGroup: batch
-    templateGroup: repo_name
+    templateGroup: repo
     taskCount: 1
     placementStrategy: '[{"field": "memory", "type": "binpack"}]'
     cloudwatchEvent:
@@ -179,7 +184,6 @@ taskDefinitionTemplates:
 ```
 
 ### Json Template examples
-#### `infra/conf/dev.json`
 
 `environment` parameter is required. only same task-definition's environment `ENVIRONMENT` service is deployed.
 
@@ -200,14 +204,14 @@ http://docs.aws.amazon.com/AmazonECS/latest/developerguide/task_definition_param
 can use jinja2 template.
 this script use environment variables below:
 
-* `CLUSTER_NAME` (required): deployment ecs cluster name.
-* `ENVIRONMENT` (required): deployment environment. only same environment is deployed. related to `task-definition-json`'s environment value
+* `CLUSTER_NAME` (required): The ecs cluster name to deploy.
+* `ENVIRONMENT` (required): deployment environment.
 * `TEMPLATE_GROUP` (optional): refer to wercker.yml's `template-group`.
 * `SERVICE_GROUP` (optional): refer to wercker.yml's `deploy-service-group`.
-* `DESIRED_COUNT` (required): ecs service's desired count.
-* `MINIMUM_HEALTHY_PERCENT` (optional): ecs service's minimum_healthy_percent. (default: 50)
-* `MAXIMUM_PERCENT` (optional): ecs service's maximum_percent. (default: 200)
-* `DISTINCT_INSTANCE` (optional): ecs service placementConstraints type is distinctInstance (default: False)
+* `DESIRED_COUNT` (required): ecs service desired count.
+* `MINIMUM_HEALTHY_PERCENT` (optional): ecs service minimum_healthy_percent. (default: 50)
+* `MAXIMUM_PERCENT` (optional): ecs service maximum_percent. (default: 200)
+* `DISTINCT_INSTANCE` (optional): set ecs service placementConstraints type to distinctInstance (default: False)
 
 ```
 [
