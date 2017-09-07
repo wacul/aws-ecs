@@ -8,7 +8,6 @@ from multiprocessing import Queue
 from queue import Queue, Empty
 from random import randint
 from threading import Thread
-from typing import List
 
 import botocore.exceptions
 import yaml
@@ -365,14 +364,14 @@ class DeployManager(object):
                 self.task_queue.put([task, ProcessMode.stopScheduledTask])
             self.task_queue.join()
 
-    def stop_before_deploy(self, service_list: List[Service]):
+    def stop_before_deploy(self, service_list):
         if len(service_list) > 0:
             h1("Step: Stop ECS Service Before Deploy")
             for service in service_list:
                 self.task_queue.put([service, ProcessMode.stopBeforeDeploy])
             self.task_queue.join()
 
-    def start_after_deploy(self, service_list: List[Service]):
+    def start_after_deploy(self, service_list):
         if len(service_list) > 0:
             h1("Step: Start ECS Service After Deploy")
             for service in service_list:
@@ -483,7 +482,7 @@ class DeployManager(object):
             self.task_queue.put([scheduled_task, ProcessMode.checkDeployScheduledTask])
         self.task_queue.join()
 
-    def wait_for_stable(self, service_list: List[Service]):
+    def wait_for_stable(self, service_list: list):
         if len(service_list) > 0:
             h1("Step: Wait for Service Status 'Stable'")
         for service in service_list:
@@ -504,7 +503,7 @@ class DeployManager(object):
             sys.exit(1)
 
 
-def get_stop_beofre_deploy_list(service_list: List[Service]) -> List[Service]:
+def get_stop_beofre_deploy_list(service_list: list) -> list:
     stop_before_deploy_list = []
     for service in service_list:
         if service.stop_before_deploy and service.origin_desired_count > 0:
