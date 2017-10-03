@@ -269,44 +269,53 @@ class DeployProcess(Thread):
 
 class DeployManager(object):
     def __init__(self, args):
+        self._args = args
+
         self.awsutils = AwsUtils(access_key=args.key, secret_key=args.secret, region=args.region)
         self.task_queue = Queue()
 
-        self.service_list,\
-            self.deploy_service_list,\
-            self.scheduled_task_list,\
-            self.deploy_scheduled_task_list,\
-            self.environment = get_deploy_list(
-                    services_yaml=args.services_yaml,
-                    environment_yaml=args.environment_yaml,
-                    task_definition_template_dir=args.task_definition_template_dir,
-                    task_definition_config_json=args.task_definition_config_json,
-                    task_definition_config_env=args.task_definition_config_env,
-                    deploy_service_group=args.deploy_service_group,
-                    template_group=args.template_group
-                )
-
         self.cluster_list = self.awsutils.list_clusters()
         self.threads_count = args.threads_count
-        # thread数がタスクの数を超えているなら減らす
-        deploy_size = len(self.deploy_scheduled_task_list) + len(self.deploy_service_list)
-        if deploy_size < self.threads_count:
-            self.threads_count = deploy_size
 
         self.key = args.key
         self.secret = args.secret
         self.region = args.region
-        self.is_service_zero_keep = args.service_zero_keep
-        self.template_group = args.template_group
-        self.is_delete_unused_service = args.delete_unused_service
-        self.is_stop_before_deploy = args.stop_before_deploy
 
         self.error = False
 
         self.delete_service_list = []
         self.delete_scheduled_task_list = []
+        self.service_list = []
+        self.scheduled_task_list = []
+        self.environment = None
+        self.template_group = None
+        self.is_service_zero_keep = True
+        self.is_stop_before_deploy = True
 
-    def start_threads(self):
+    def _service_config(self):
+        self.service_list,\
+            self.deploy_service_list,\
+            self.scheduled_task_list,\
+            self.deploy_scheduled_task_list,\
+            self.environment = get_deploy_list(
+                    services_yaml=self._args.services_yaml,
+                    environment_yaml=self._args.environment_yaml,
+                    task_definition_template_dir=self._args.task_definition_template_dir,
+                    task_definition_config_json=self._args.task_definition_config_json,
+                    task_definition_config_env=self._args.task_definition_config_env,
+                    deploy_service_group=self._args.deploy_service_group,
+                    template_group=self._args.template_group
+                )
+        # thread数がタスクの数を超えているなら減らす
+        deploy_size = len(self.deploy_scheduled_task_list) + len(self.deploy_service_list)
+        if deploy_size < self.threads_count:
+            self.threads_count = deploy_size
+        self.is_service_zero_keep = self._args.service_zero_keep
+        self.template_group = self._args.template_group
+        self.is_delete_unused_service = self._args.delete_unused_service
+        self.is_stop_before_deploy = self._args.stop_before_deploy
+
+    def _start_threads(self):
         # threadの開始
         for i in range(self.threads_count):
             thread = DeployProcess(
@@ -321,71 +330,86 @@ class DeployManager(object):
             thread.start()
 
     def run(self):
-        # Step: Check ECS cluster
-        self.check_ecs_cluster()
-
-        self.start_threads()
-        self.fetch_ecs_information()
+        self._service_config()
+        self._start_threads()
+        self._fetch_ecs_information()
 
         # Step: Delete Unused Service
-        self.delete_unused()
-        self.check_deploy()
+        self._delete_unused()
+        self._check_deploy()
 
-        self.stop_scheduled_task()
-        stop_before_deploy_service_list = get_stop_beofre_deploy_list(self.service_list)
+        self._stop_scheduled_task()
+        stop_before_deploy_service_list = get_stop_before_deploy_list(self.service_list)
         if self.is_stop_before_deploy:
-            self.stop_before_deploy(stop_before_deploy_service_list)
-            self.wait_for_stable(stop_before_deploy_service_list)
-        self.deploy_service()
-        self.wait_for_stable(self.deploy_service_list)
+            self._stop_before_deploy(stop_before_deploy_service_list)
+            self._wait_for_stable(stop_before_deploy_service_list)
+        self._deploy_service()
+        self._wait_for_stable(self.deploy_service_list)
         if self.is_stop_before_deploy:
-            self.start_after_deploy(stop_before_deploy_service_list)
-            self.wait_for_stable(stop_before_deploy_service_list)
-        self.deploy_scheduled_task()
+            self._start_after_deploy(stop_before_deploy_service_list)
+            self._wait_for_stable(stop_before_deploy_service_list)
+        self._deploy_scheduled_task()
 
-        self.result_check()
+        self._result_check()
 
     def dry_run(self):
-        # Step: Check ECS cluster
-        self.check_ecs_cluster()
-
-        self.start_threads()
-        self.fetch_ecs_information()
+        self._service_config()
+        self._start_threads()
+        self._fetch_ecs_information()
 
         # Step: Check Delete Service
-        self.delete_unused(dry_run=True)
+        self._delete_unused(dry_run=True)
         # Step: Check Service
-        self.check_deploy()
+        self._check_deploy()
 
-    def stop_scheduled_task(self):
+    def delete(self):
+        self.environment = self._args.environment
+        self._start_threads()
+        self._fetch_ecs_information(is_all=True)
+
+        if self.delete_service_list == 0 and self.delete_scheduled_task_list == 0:
+            info("No delete service or scheduled task")
+            return
+        h1("Delete Service or Scheduled Task")
+        for service in self.delete_service_list:
+            print("* %s" % service.service_name)
+        for task in self.delete_scheduled_task_list:
+            print("* %s" % task.family)
+
+        reply = input("\nWould you like delete all ecs service in %s (y/n)\n" % self.environment)
+        if reply != 'y':
+            return
+        self._delete_unused()
+
+    def _stop_scheduled_task(self):
         if len(self.deploy_scheduled_task_list) > 0:
             h1("Step: Stop ECS Scheduled Task")
             for task in self.deploy_scheduled_task_list:
                 self.task_queue.put([task, ProcessMode.stopScheduledTask])
             self.task_queue.join()
 
-    def stop_before_deploy(self, service_list):
+    def _stop_before_deploy(self, service_list):
         if len(service_list) > 0:
             h1("Step: Stop ECS Service Before Deploy")
             for service in service_list:
                 self.task_queue.put([service, ProcessMode.stopBeforeDeploy])
             self.task_queue.join()
 
-    def start_after_deploy(self, service_list):
+    def _start_after_deploy(self, service_list):
         if len(service_list) > 0:
             h1("Step: Start ECS Service After Deploy")
             for service in service_list:
                 self.task_queue.put([service, ProcessMode.startAfterDeploy])
             self.task_queue.join()
 
-    def deploy_scheduled_task(self):
+    def _deploy_scheduled_task(self):
         if len(self.deploy_scheduled_task_list) > 0:
             h1("Step: Deploy ECS Scheduled Task")
             for task in self.deploy_scheduled_task_list:
                 self.task_queue.put([task, ProcessMode.deployScheduledTask])
             self.task_queue.join()
 
-    def delete_unused(self, dry_run=False):
+    def _delete_unused(self, dry_run=False):
         if dry_run:
             h1("Step: Check Delete Unused")
         else:
@@ -408,21 +432,15 @@ class DeployManager(object):
                     target_arn=delete_scheduled_task.task_environment.target_lambda_arn
                 )
 
-    def check_ecs_cluster(self):
-        h1("Step: Check ECS cluster")
-        for cluster_name in self.cluster_list:
-            self.awsutils.describe_cluster(cluster=cluster_name)
-            success("Checking cluster '{cluster_name}' succeeded".format(cluster_name=cluster_name))
-
-    def fetch_ecs_information(self):
+    def _fetch_ecs_information(self, is_all=False):
         h1("Step: Fetch ECS Information")
         describe_service_list = []
-        if len(self.service_list) > 0:
+        if len(self.service_list) > 0 or is_all:
             describe_service_list = fetch_aws_service(cluster_list=self.cluster_list, awsutils=self.awsutils)
             for s in describe_service_list:
                 self.task_queue.put([s, ProcessMode.fetchServices])
         cloud_watch_rule_list = []
-        if len(self.scheduled_task_list) > 0:
+        if len(self.scheduled_task_list) > 0 or is_all:
             rules = self.awsutils.list_cloudwatch_event_rules()
             for r in rules:
                 if r.get('Description') == scheduled_task_managed_description:
@@ -467,14 +485,14 @@ class DeployManager(object):
                 self.delete_scheduled_task_list.append(cloud_watch_rule)
         success("Check succeeded")
 
-    def deploy_service(self):
+    def _deploy_service(self):
         if len(self.deploy_service_list) > 0:
             h1("Step: Deploy ECS Service")
             for service in self.deploy_service_list:
                 self.task_queue.put([service, ProcessMode.deployService])
             self.task_queue.join()
 
-    def check_deploy(self):
+    def _check_deploy(self):
         h1("Step: Check Deploy ECS Service and Scheduled tasks")
         for service in self.deploy_service_list:
             self.task_queue.put([service, ProcessMode.checkDeployService])
@@ -482,14 +500,14 @@ class DeployManager(object):
             self.task_queue.put([scheduled_task, ProcessMode.checkDeployScheduledTask])
         self.task_queue.join()
 
-    def wait_for_stable(self, service_list: list):
+    def _wait_for_stable(self, service_list: list):
         if len(service_list) > 0:
             h1("Step: Wait for Service Status 'Stable'")
         for service in service_list:
             self.task_queue.put([service, ProcessMode.waitForStable])
         self.task_queue.join()
 
-    def result_check(self):
+    def _result_check(self):
         error_service_list = list(filter(
             lambda service: service.status == ProcessStatus.error, self.deploy_service_list
         ))
@@ -503,7 +521,7 @@ class DeployManager(object):
             sys.exit(1)
 
 
-def get_stop_beofre_deploy_list(service_list: list) -> list:
+def get_stop_before_deploy_list(service_list: list) -> list:
     stop_before_deploy_list = []
     for service in service_list:
         if service.stop_before_deploy and service.origin_desired_count > 0:
@@ -514,8 +532,6 @@ def get_stop_beofre_deploy_list(service_list: list) -> list:
 def deregister_task_definition(awsutils, service: Service):
     retry_count = 0
     if service.origin_task_definition_arn is None:
-        return
-    if service.is_same_task_definition:
         return
     while True:
         try:

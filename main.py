@@ -51,6 +51,14 @@ def init():
     test_templates_parser.add_argument('--no-task-definition-config-env', dest='task_definition_config_env',
                                        default=True, action='store_false')
 
+    delete_parser = subparser.add_parser("delete")
+    delete_parser.add_argument('--environment', required=True)
+    delete_parser.add_argument('--key', default="")
+    delete_parser.add_argument('--secret', default="")
+    delete_parser.add_argument('--region', default='us-east-1')
+    delete_parser.add_argument('--threads-count', type=int, default=5)
+
+
     argp = parser.parse_args()
     if argp.command == 'test-templates':
         if argp.task_definition_template_dir is None and argp.services_yaml is None:
@@ -73,9 +81,12 @@ if __name__ == '__main__':
         test_templates(args=args)
     else:
         service_manager = DeployManager(args)
-        if args.test:
-            logger.info("test is successful.")
-        elif args.dry_run:
-            service_manager.dry_run()
-        else:
-            service_manager.run()
+        if args.command == 'delete':
+            service_manager.delete()
+        elif args.command == 'service':
+            if args.test:
+                logger.info("test is successful.")
+            elif args.dry_run:
+                service_manager.dry_run()
+            else:
+                service_manager.run()

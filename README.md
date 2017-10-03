@@ -278,3 +278,9 @@ docker run -it --rm -e "AWS_PROFILE=profile" -v $HOME/.aws/:/root/.aws/ -v $(pwd
 ```
 docker run -it --rm -e "AWS_PROFILE=profile" -v $HOME/.aws/:/root/.aws/ -v $(pwd)/infra/:/infra quay.io/wacul/aws-ecs service --environment-yaml /infra/conf/dev.yml --service-yaml /infra/services.yml --template-group web-repo --dry-run
 ```
+
+* delete
+
+```
+docker run -it --rm -e "AWS_PROFILE=profile" -v $HOME/.aws/:/root/.aws/ -v $(pwd)/infra/:/infra quay.io/wacul/aws-ecs --delete -environment dev
+```
