@@ -291,6 +291,7 @@ class DeployManager(object):
         self.template_group = None
         self.is_service_zero_keep = True
         self.is_stop_before_deploy = True
+        self.is_delete_unused_service = True
 
     def _service_config(self):
         self.service_list,\

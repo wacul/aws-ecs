@@ -282,5 +282,5 @@ docker run -it --rm -e "AWS_PROFILE=profile" -v $HOME/.aws/:/root/.aws/ -v $(pwd
 * delete
 
 ```
-docker run -it --rm -e "AWS_PROFILE=profile" -v $HOME/.aws/:/root/.aws/ -v $(pwd)/infra/:/infra quay.io/wacul/aws-ecs --delete -environment dev
+docker run -it --rm -e "AWS_PROFILE=profile" -v $HOME/.aws/:/root/.aws/ -v $(pwd)/infra/:/infra quay.io/wacul/aws-ecs delete --environment dev
 ```
