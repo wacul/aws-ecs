@@ -15,6 +15,8 @@ The step is written in Python 3.5 and use Pip and Boto3 module.
 * `template-group` (optional): For multiple repositories ecs cluster deployment. When delete unused service with multiple repositories deployment, service and scheduled task settings exists for each repository. Then, only matches between `template-group` and ecs task-definition's environment `TEMPLATE_GROUP` value are targeted.
 * `deploy-service-group` (optional): Only matches between `deploy-service-group` and ecs task-defintion `service-group` value on `service-yml` are deployed. If do not set `deploy-service-group` value, all service and scheduled task is deployed.
 * `threads-count` (optional): python thread size. (default: 10)
+* `service-wait-max-attempts` (optional): ecs wait for stable max attempts. (default: 12)
+* `service-wait-delay` (optional): ecs wait for stable delay. (default: 10)
 * `service-zero-keep` (optional): when deployment, if ecs service with desired count 0, keep service desired count 0. (default: true)
 * `stop-before-deploy` (optional): If this value is false, `stopBeforeDeploy` option in `services-yml` is ignored.  (default: true)
 

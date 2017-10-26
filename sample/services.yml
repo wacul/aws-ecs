@@ -1,0 +1,76 @@
+---
+
+services:
+  testroop:
+    cluster: "{{cluster_app}}"
+    serviceGroup: service
+    templateGroup: sample
+    desiredCount: 1
+    minimumHealthyPercent: 50
+    maximumPercent: 200
+    taskDefinitionTemplate: app
+    stopBeforeDeploy: true
+
+scheduledTasks:
+  test3:
+    cluster: "{{cluster_spot_batch}}"
+    serviceGroup: btch
+    templateGroup: sample
+    taskCount: 1
+    placementStrategy: '[{"field": "memory", "type": "binpack"}]'
+    cloudwatchEvent:
+      scheduleExpression: rate(5 minutes)
+      targetLambdaArn: "{{targetLambdaArn}}"
+    taskDefinitionTemplate: batch
+    vars:
+      cpu: 64
+      memory: 64
+
+taskDefinitionTemplates:
+  app: |
+    {
+      "family": "{{environment}}-{{item}}",
+      "containerDefinitions": [
+        {
+          "name": "{{environment}}-{{item}}",
+          "cpu": {{cpu}},
+          "memoryReservation": {{memoryReservation}},
+          "image": "alpine",
+          "command": [
+            "sh",
+            "-c",
+            "while :;do echo test;sleep 5;done"
+          ],
+          "portMappings": {{portMappings|default([])|tojson}},
+          "logConfiguration": {
+            "logDriver": "syslog",
+            "options": {
+              "tag": "docker/{{environment}}/{{item}}/{% raw %}{{.ID}}{% endraw %}"
+            }
+          },
+          "volumesFrom": [],
+          "mountPoints": [],
+          "essential": true
+        }
+      ]
+    }   
+  batch: |
+    {
+      "family": "{{environment}}-{{item}}",
+      "containerDefinitions": [
+        {
+          "name": "{{environment}}-{{item}}",
+          "cpu": {{cpu}},
+          "memoryReservation": {{memoryReservation}},
+          "image": "quay.io/wacul/ai-analyst-back-base:test",
+          "command": [
+            "sleep",
+            "360;",
+            "echo",
+            "done"
+          ],
+          "portMappings": {{portMappings|default([])|tojson}},
+          "essential": true
+        }
+      ]
+    }

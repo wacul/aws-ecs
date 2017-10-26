@@ -4,6 +4,7 @@ import os
 import sys
 import time
 import traceback
+import sys
 from multiprocessing import Queue
 from queue import Queue, Empty
 from random import randint
@@ -23,12 +24,15 @@ from ecs.utils import h1, success, error, info
 
 
 class DeployProcess(Thread):
-    def __init__(self, task_queue, key, secret, region, is_service_zero_keep, is_stop_before_deploy):
+    def __init__(self, task_queue, key, secret, region, is_service_zero_keep, is_stop_before_deploy,
+                 service_wait_max_attempts, service_wait_delay):
         super().__init__()
         self.task_queue = task_queue
         self.awsutils = AwsUtils(access_key=key, secret_key=secret, region=region)
         self.is_service_zero_keep = is_service_zero_keep
         self.is_stop_before_deploy = is_stop_before_deploy
+        self.service_wait_max_attempts = service_wait_max_attempts
+        self.service_wait_delay = service_wait_delay
 
     def run(self):
         while True:
@@ -61,7 +65,12 @@ class DeployProcess(Thread):
             self.check_deploy_service(deploy)
 
         elif mode == ProcessMode.waitForStable:
-            wait_for_stable(self.awsutils, deploy)
+            wait_for_stable(
+                awsutils=self.awsutils,
+                service=deploy,
+                max_attempts=self.service_wait_max_attempts,
+                delay=self.service_wait_delay
+            )
 
         elif mode == ProcessMode.deployScheduledTask:
             self.deploy_scheduled_task(deploy)
@@ -276,6 +285,8 @@ class DeployManager(object):
 
         self.cluster_list = self.awsutils.list_clusters()
         self.threads_count = args.threads_count
+        self.service_wait_max_attempts = args.service_wait_max_attempts
+        self.service_wait_delay = args.service_wait_delay
 
         self.key = args.key
         self.secret = args.secret
@@ -325,7 +336,9 @@ class DeployManager(object):
                 secret=self.secret,
                 region=self.region,
                 is_service_zero_keep=self.is_service_zero_keep,
-                is_stop_before_deploy=self.is_stop_before_deploy
+                is_stop_before_deploy=self.is_stop_before_deploy,
+                service_wait_max_attempts=self.service_wait_max_attempts,
+                service_wait_delay=self.service_wait_delay
             )
             thread.setDaemon(True)
             thread.start()
@@ -550,18 +563,17 @@ def deregister_task_definition(awsutils, service: Service):
         break
 
 
-def wait_for_stable(awsutils, service: Service):
-    retry_count = 0
-    while True:
-        try:
-            res_service = awsutils.wait_for_stable(cluster_name=service.task_environment.cluster_name,
-                                                   service_name=service.service_name)
-        except botocore.exceptions.WaiterError:
-            if retry_count > 2:
-                raise
-            retry_count = retry_count + 1
-            continue
-        break
+def wait_for_stable(awsutils, service: Service, delay: int, max_attempts: int):
+    try:
+        res_service = awsutils.wait_for_stable(
+            cluster_name=service.task_environment.cluster_name,
+            service_name=service.service_name,
+            max_attempts=max_attempts,
+            delay=delay
+        )
+    except botocore.exceptions.WaiterError:
+        error("service '{service.service_name}' update wait timeout.".format(service=service))
+        sys.exit(1)
     service.update(res_service)
     deregister_task_definition(awsutils, service)
     success("service '{service.service_name}' ({service.running_count:d} / {service.desired_count}) update completed."

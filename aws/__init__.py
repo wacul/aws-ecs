@@ -291,10 +291,17 @@ class AwsUtils(object):
 
         return self.describe_service(cluster=cluster, service=service)
 
-    def wait_for_stable(self, cluster_name: str, service_name: str):
+    def wait_for_stable(self, cluster_name: str, service_name: str, delay: int, max_attempts: int):
         # Waiting for the service update is done
         waiter = self.client.get_waiter('services_stable')
-        waiter.wait(cluster=cluster_name, services=[service_name])
+        waiter.wait(
+            cluster=cluster_name,
+            services=[service_name],
+            WaiterConfig={
+                'Delay': delay,
+                'MaxAttempts': max_attempts
+            }
+        )
         return self.describe_service(cluster=cluster_name, service=service_name)
 
     def create_scheduled_task(self, scheduled_task: ScheduledTask, description: str):

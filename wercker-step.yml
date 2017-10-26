@@ -1,5 +1,5 @@
 name: aws-ecs
-version: 1.3.3
+version: 1.4.0
 description: Deploy service to ECS
 keywords:
   - aws
@@ -65,4 +65,12 @@ properties:
   threads-count:
     type: int
     default: 10
+    required: false
+  service-wait-delay:
+    type: int
+    default: 10
+    required: false
+  service-wait-max-attempts:
+    type: int
+    default: 12
     required: false
