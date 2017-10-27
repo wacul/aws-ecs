@@ -1,7 +1,6 @@
 # coding: utf-8
 import json
 import os
-import sys
 import time
 import traceback
 import sys
@@ -9,8 +8,7 @@ from multiprocessing import Queue
 from queue import Queue, Empty
 from random import randint
 from threading import Thread
-
-import botocore.exceptions
+from botocore.exceptions import ClientError, WaiterError
 import yaml
 
 import render
@@ -18,8 +16,7 @@ from aws import AwsUtils, ServiceNotFoundException, CloudwatchEventRuleNotFoundE
 from ecs.classes import ProcessMode, ProcessStatus, VariableNotFoundException
 from ecs.scheduled_tasks import ScheduledTask, get_scheduled_task_list, get_deploy_scheduled_task_list, \
     CloudwatchEventRule, CloudWatchEventState, scheduled_task_managed_description
-from ecs.service import Service, DescribeService, get_service_list_json, get_service_list_yaml, \
-    fetch_aws_service, get_deploy_service_list
+import ecs.service
 from ecs.utils import h1, success, error, info
 
 
@@ -90,7 +87,7 @@ class DeployProcess(Thread):
         elif mode == ProcessMode.startAfterDeploy:
             self.start_after_deploy(deploy)
 
-    def stop_before_deploy(self, service: Service):
+    def stop_before_deploy(self, service: ecs.service.Service):
         res_service = self.awsutils.update_service_desired_count(
             cluster=service.task_environment.cluster_name,
             service=service.service_name,
@@ -101,7 +98,7 @@ class DeployProcess(Thread):
                 "    - {service.desired_count:d} task desired"
                 .format(service=service))
 
-    def start_after_deploy(self, service: Service):
+    def start_after_deploy(self, service: ecs.service.Service):
         res_service = self.awsutils.update_service_desired_count(
             cluster=service.task_environment.cluster_name,
             service=service.service_name,
@@ -152,7 +149,7 @@ class DeployProcess(Thread):
                         scheduled_task=scheduled_task,
                         task_definition_arn=scheduled_task.task_definition_arn))
 
-    def process_service(self, service: Service):
+    def process_service(self, service: ecs.service.Service):
         self.__register_task_definition(service)
         if service.origin_service_exists:
             self.__update_service(service)
@@ -163,17 +160,17 @@ class DeployProcess(Thread):
                 "    - {service.task_environment.desired_count:d} task desired"
                 .format(service=service))
 
-    def fetch_service(self, describe_service: DescribeService):
+    def fetch_service(self, describe_service: ecs.service.DescribeService):
         task_definition = self.__describe_task_definition(name=describe_service.task_definition_arn)
         describe_service.set_from_task_definition(task_definition)
 
-    def check_deploy_service(self, service: Service):
+    def check_deploy_service(self, service: ecs.service.Service):
         if service.origin_task_definition_arn is None:
             try:
                 res_service = self.awsutils.describe_service(
                     service.task_environment.cluster_name, service.service_name
                 )
-                describe_service = DescribeService(service_description=res_service)
+                describe_service = ecs.service.DescribeService(service_description=res_service)
                 task_definition = self.awsutils.describe_task_definition(describe_service.task_definition_arn)
                 describe_service.set_from_task_definition(task_definition)
                 service.set_from_describe_service(describe_service=describe_service)
@@ -208,7 +205,7 @@ class DeployProcess(Thread):
         success("Checking scheduled task '{scheduled_task.name}' succeeded. \n\033[39m{checks}"
                 .format(scheduled_task=scheduled_task, checks=checks))
 
-    def __create_service(self, service: Service):
+    def __create_service(self, service: ecs.service.Service):
         res_service = self.awsutils.create_service(
             cluster=service.task_environment.cluster_name,
             service=service.service_name,
@@ -220,7 +217,7 @@ class DeployProcess(Thread):
         )
         service.update(res_service)
 
-    def __update_service(self, service: Service):
+    def __update_service(self, service: ecs.service.Service):
         desired_count = service.task_environment.desired_count
         # サービスのタスク数が0だったらそれを維持する
         if self.is_service_zero_keep and service.origin_desired_count == 0:
@@ -243,7 +240,7 @@ class DeployProcess(Thread):
         while True:
             try:
                 task_definition = self.awsutils.describe_task_definition(name=name)
-            except botocore.exceptions.ClientError as e:
+            except ClientError as e:
                 error_code = e.response['Error']['Code']
                 if error_code == 'ThrottlingException':
                     if retry_count > 6:
@@ -256,13 +253,13 @@ class DeployProcess(Thread):
             break
         return task_definition
 
-    def __register_task_definition(self, service: Service):
+    def __register_task_definition(self, service: ecs.service.Service):
         # for register task rate limit
         retry_count = 0
         while True:
             try:
                 task_definition = self.awsutils.register_task_definition(task_definition=service.task_definition)
-            except botocore.exceptions.ClientError as e:
+            except ClientError as e:
                 error_code = e.response['Error']['Code']
                 if error_code == 'ThrottlingException':
                     if retry_count > 6:
@@ -450,7 +447,7 @@ class DeployManager(object):
         h1("Step: Fetch ECS Information")
         describe_service_list = []
         if len(self.service_list) > 0 or is_all:
-            describe_service_list = fetch_aws_service(cluster_list=self.cluster_list, awsutils=self.awsutils)
+            describe_service_list = ecs.service.fetch_aws_service(cluster_list=self.cluster_list, awsutils=self.awsutils)
             for s in describe_service_list:
                 self.task_queue.put([s, ProcessMode.fetchServices])
         cloud_watch_rule_list = []
@@ -543,18 +540,18 @@ def get_stop_before_deploy_list(service_list: list) -> list:
     return stop_before_deploy_list
 
 
-def deregister_task_definition(awsutils, service: Service):
+def deregister_task_definition(awsutils, service: ecs.service.Service):
     retry_count = 0
     if service.origin_task_definition_arn is None:
         return
     while True:
         try:
             awsutils.deregister_task_definition(service.origin_task_definition_arn)
-        except botocore.exceptions.ClientError as e:
+        except ClientError as e:
             error_code = e.response['Error']['Code']
             if error_code == 'ThrottlingException':
                 if retry_count > 3:
-                    raise
+                    break
                 retry_count = retry_count + 1
                 time.sleep(3)
                 continue
@@ -563,7 +560,7 @@ def deregister_task_definition(awsutils, service: Service):
         break
 
 
-def wait_for_stable(awsutils, service: Service, delay: int, max_attempts: int):
+def wait_for_stable(awsutils, service: ecs.service.Service, delay: int, max_attempts: int):
     try:
         res_service = awsutils.wait_for_stable(
             cluster_name=service.task_environment.cluster_name,
@@ -571,7 +568,7 @@ def wait_for_stable(awsutils, service: Service, delay: int, max_attempts: int):
             max_attempts=max_attempts,
             delay=delay
         )
-    except botocore.exceptions.WaiterError:
+    except WaiterError:
         error("service '{service.service_name}' update wait timeout.".format(service=service))
         sys.exit(1)
     service.update(res_service)
@@ -602,7 +599,7 @@ def test_templates(args):
                     args.task_definition_config_env
                 )
 
-                get_service_list_yaml(
+                ecs.service.get_service_list_yaml(
                     services_config=services_config,
                     environment_config=environment_config,
                     task_definition_config_env=args.task_definition_config_env,
@@ -632,7 +629,7 @@ def get_deploy_list(
             raise VariableNotFoundException("environment-yaml requires parameter `environment`.")
         environment = render.render_template(str(environment), environment_config, task_definition_config_env)
 
-        service_list = get_service_list_yaml(
+        service_list = ecs.service.get_service_list_yaml(
             services_config=services_config,
             environment_config=environment_config,
             task_definition_config_env=task_definition_config_env,
@@ -651,12 +648,12 @@ def get_deploy_list(
     else:
         task_definition_config = json.load(task_definition_config_json)
         environment = task_definition_config['environment']
-        service_list = get_service_list_json(
+        service_list = ecs.service.get_service_list_json(
             task_definition_template_dir=task_definition_template_dir,
             task_definition_config=task_definition_config,
             task_definition_config_env=task_definition_config_env
         )
-    deploy_service_list = get_deploy_service_list(service_list, deploy_service_group, template_group)
+    deploy_service_list = ecs.service.get_deploy_service_list(service_list, deploy_service_group, template_group)
 
     # duplicate name check
     for deploy_service in deploy_service_list:
