@@ -59,6 +59,8 @@ def init():
     delete_parser.add_argument('--secret', default="")
     delete_parser.add_argument('--region', default='us-east-1')
     delete_parser.add_argument('--threads-count', type=int, default=5)
+    delete_parser.add_argument('--service-wait-max-attempts', type=int, default=18)
+    delete_parser.add_argument('--service-wait-delay', type=int, default=10)
 
 
     argp = parser.parse_args()
