@@ -334,7 +334,7 @@ class DeployManager(object):
 
     def _set_deploy_list(self):
         for service in self.all_deploy_target_service_list:
-            if self.is_stop_before_deploy and service.stop_before_deploy and service.origin_desired_count > 0:
+            if self.is_stop_before_deploy and service.stop_before_deploy:
                 if service.is_primary_placement:
                     self.primary_stop_before_deploy_service_list.append(service)
                 else:
