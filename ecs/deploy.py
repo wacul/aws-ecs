@@ -22,7 +22,7 @@ from ecs.utils import h1, h2, success, error, info
 
 class DeployProcess(Thread):
     def __init__(self, task_queue, key, secret, region, is_service_zero_keep, is_stop_before_deploy,
-                 service_wait_max_attempts, service_wait_delay, is_placement_strategy_binpack_first):
+                 service_wait_max_attempts, service_wait_delay):
         super().__init__()
         self.task_queue = task_queue
         self.awsutils = AwsUtils(access_key=key, secret_key=secret, region=region)
@@ -30,7 +30,6 @@ class DeployProcess(Thread):
         self.is_stop_before_deploy = is_stop_before_deploy
         self.service_wait_max_attempts = service_wait_max_attempts
         self.service_wait_delay = service_wait_delay
-        self.is_placement_strategy_binpack_first = is_placement_strategy_binpack_first
 
     def run(self):
         while True:
@@ -39,6 +38,7 @@ class DeployProcess(Thread):
             except Empty:
                 time.sleep(1)
                 continue
+            # noinspection PyBroadException
             try:
                 self.process(deploy, mode)
             except:
@@ -296,9 +296,9 @@ class DeployManager(object):
         self.delete_service_list = []
         self.all_service_list = []
         self.all_deploy_target_service_list = []
-        self.binpack_first_stop_before_deploy_service_list = []
+        self.primary_stop_before_deploy_service_list = []
         self.stop_before_deploy_service_list = []
-        self.binpack_first_deploy_service_list = []
+        self.primary_deploy_service_list = []
         self.remain_deploy_service_list = []
         self.delete_scheduled_task_list = []
         self.scheduled_task_list = []
@@ -308,7 +308,6 @@ class DeployManager(object):
         self.is_service_zero_keep = True
         self.is_stop_before_deploy = True
         self.is_delete_unused_service = True
-        self.is_placement_strategy_binpack_first = True
 
     def _service_config(self):
         self.all_service_list,\
@@ -332,18 +331,17 @@ class DeployManager(object):
         self.template_group = self._args.template_group
         self.is_delete_unused_service = self._args.delete_unused_service
         self.is_stop_before_deploy = self._args.stop_before_deploy
-        self.is_placement_strategy_binpack_first = self._args.placement_strategy_binpack_first
 
     def _set_deploy_list(self):
         for service in self.all_deploy_target_service_list:
             if self.is_stop_before_deploy and service.stop_before_deploy and service.origin_desired_count > 0:
-                if self.is_placement_strategy_binpack_first and service.is_service_binpack_strategy():
-                    self.binpack_first_stop_before_deploy_service_list.append(service)
+                if service.is_primary_placement:
+                    self.primary_stop_before_deploy_service_list.append(service)
                 else:
                     self.stop_before_deploy_service_list.append(service)
             else:
-                if self.is_placement_strategy_binpack_first and service.is_service_binpack_strategy():
-                    self.binpack_first_deploy_service_list.append(service)
+                if service.is_primary_placement:
+                    self.primary_deploy_service_list.append(service)
                 else:
                     self.remain_deploy_service_list.append(service)
 
@@ -358,8 +356,7 @@ class DeployManager(object):
                 is_service_zero_keep=self.is_service_zero_keep,
                 is_stop_before_deploy=self.is_stop_before_deploy,
                 service_wait_max_attempts=self.service_wait_max_attempts,
-                service_wait_delay=self.service_wait_delay,
-                is_placement_strategy_binpack_first=self.is_placement_strategy_binpack_first
+                service_wait_delay=self.service_wait_delay
             )
             thread.setDaemon(True)
             thread.start()
@@ -420,26 +417,26 @@ class DeployManager(object):
             self.task_queue.join()
 
     def _stop_before_deploy(self):
-        if len(self.binpack_first_stop_before_deploy_service_list) > 0 \
+        if len(self.primary_stop_before_deploy_service_list) > 0 \
                 or len(self.stop_before_deploy_service_list) > 0:
             h1("Step: Stop ECS Service Before Deploy")
-            for service in self.binpack_first_stop_before_deploy_service_list:
+            for service in self.primary_stop_before_deploy_service_list:
                 self.task_queue.put([service, ProcessMode.stopBeforeDeploy])
             for service in self.stop_before_deploy_service_list:
                 self.task_queue.put([service, ProcessMode.stopBeforeDeploy])
             self.task_queue.join()
             h2("Wait for Service Status 'Stable'")
-            self._wait_for_stable(self.binpack_first_stop_before_deploy_service_list)
+            self._wait_for_stable(self.primary_stop_before_deploy_service_list)
             self._wait_for_stable(self.stop_before_deploy_service_list)
 
     def _start_after_deploy(self):
-        if len(self.binpack_first_stop_before_deploy_service_list) > 0:
-            h1("Step: Start Binpack ECS Service After Deploy")
-            for service in self.binpack_first_stop_before_deploy_service_list:
+        if len(self.primary_stop_before_deploy_service_list) > 0:
+            h1("Step: Start Primary ECS Service After Deploy")
+            for service in self.primary_stop_before_deploy_service_list:
                 self.task_queue.put([service, ProcessMode.startAfterDeploy])
             self.task_queue.join()
             h2("Wait for Service Status 'Stable'")
-            self._wait_for_stable(self.binpack_first_stop_before_deploy_service_list)
+            self._wait_for_stable(self.primary_stop_before_deploy_service_list)
         if len(self.stop_before_deploy_service_list) > 0:
             h1("Step: Start ECS Service After Deploy")
             for service in self.stop_before_deploy_service_list:
@@ -534,20 +531,20 @@ class DeployManager(object):
         success("Check succeeded")
 
     def _deploy_service(self):
-        if len(self.binpack_first_deploy_service_list):
-            h1("Step: Deploy Binpack ECS Service")
-            for service in self.binpack_first_deploy_service_list:
+        if len(self.primary_deploy_service_list):
+            h1("Step: Deploy Primary ECS Service")
+            for service in self.primary_deploy_service_list:
                 self.task_queue.put([service, ProcessMode.deployService])
             self.task_queue.join()
             h2("Wait for Service Status 'Stable'")
-            self._wait_for_stable(self.binpack_first_deploy_service_list)
-        if len(self.binpack_first_stop_before_deploy_service_list) > 0 \
-            or len(self.stop_before_deploy_service_list) > 0 \
-            or len(self.remain_deploy_service_list) > 0:
+            self._wait_for_stable(self.primary_deploy_service_list)
+        if len(self.primary_stop_before_deploy_service_list) > 0 \
+                or len(self.stop_before_deploy_service_list) > 0 \
+                or len(self.remain_deploy_service_list) > 0:
             h1("Step: Deploy ECS Service")
             for service in self.remain_deploy_service_list:
                 self.task_queue.put([service, ProcessMode.deployService])
-            for service in self.binpack_first_stop_before_deploy_service_list:
+            for service in self.primary_stop_before_deploy_service_list:
                 self.task_queue.put([service, ProcessMode.deployService])
             for service in self.stop_before_deploy_service_list:
                 self.task_queue.put([service, ProcessMode.deployService])

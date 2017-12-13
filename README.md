@@ -19,7 +19,6 @@ The step is written in Python 3.5 and use Pip and Boto3 module.
 * `service-wait-delay` (optional): ecs wait for stable delay. (default: 10)
 * `service-zero-keep` (optional): when deployment, if ecs service with desired count 0, keep service desired count 0. (default: true)
 * `stop-before-deploy` (optional): If this value is false, `stopBeforeDeploy` option in `services-yml` is ignored.  (default: true)
-* `placement-strategy-binpack-first` (optional): If this value is true, placement-strategy binpack is deployed first.  (default: true)
 
 test templates
 
@@ -94,8 +93,9 @@ services:
 * `registrator` (optional): Set ecs service environment `SERVICE_NAME` to environment parameter value and Set ecs task-definition environment `SERVICE_TAGS` value to service name. (default: False)
 * `taskDefinitionTemplate` (required): Specify ecs task-definition template name from `taskDefinitionTemplates`. service name is set to `{{item}}`.
 * `disabled` (optional): if parameter is true, scheduled task is disabled. (default: False)
-* `stopBeforeDeploy` (optional): if parameter is true, stop service before ecs service update. (default: False)
+* `stopBeforeDeploy` (optional): if this parameter is true, stop service before ecs service update. (default: False)
 * `placementStrategy` (optional): ecs service run strategy. then set ecs service environment `PLACEMENT_STRATEGY` value.
+* `primaryPlacement` (optional): if this plameter is true, ecs service start up first.
 * `vars` (optional): jinja2 template variable settings.
 
 

@@ -92,7 +92,8 @@ class DescribeService(Deploy):
 
 
 class Service(Deploy):
-    def __init__(self, task_definition: dict, stop_before_deploy: bool, placement_strategy: List[dict] = None):
+    def __init__(self, task_definition: dict, stop_before_deploy: bool, primary_placement: bool,
+                 placement_strategy: List[dict] = None):
         self.task_definition = task_definition
         self.task_environment = TaskEnvironment(task_definition)
         self.family = task_definition['family']
@@ -100,6 +101,7 @@ class Service(Deploy):
         self.desired_count = self.task_environment.desired_count
         self.stop_before_deploy = stop_before_deploy
         self.placement_strategy = placement_strategy
+        self.is_primary_placement = primary_placement
 
         self.origin_task_definition_arn = None
         self.origin_task_definition = None
@@ -138,14 +140,6 @@ class Service(Deploy):
         else:
             t = diff(ad, bd)
             return "    - Container is changed. Diff:\n{t}".format(t=t)
-
-    def is_service_binpack_strategy(self) -> bool:
-        if self.placement_strategy is None:
-            return False
-        for strategy in self.placement_strategy:
-            if strategy["type"] == "binpack":
-                return True
-        return False
 
 
 def arn_to_name(arn):
@@ -194,7 +188,7 @@ def get_service_list_json(
         except json.decoder.JSONDecodeError as e:
             raise Exception("{e.__class__.__name__} {e}\njson:\n{json}".format(e=e, json=task_definitions_data))
         for t in task_definitions:
-            service_list.append(Service(task_definition=t, stop_before_deploy=False))
+            service_list.append(Service(task_definition=t, stop_before_deploy=False, primary_placement=False))
 
     return service_list
 
@@ -315,6 +309,17 @@ def get_service_list_yaml(
                 placement_strategy_list.append(strategy)
             env.append({"name": "PLACEMENT_STRATEGY", "value": str(placement_strategy)})
 
+        primary_placement = service_config.get("primaryPlacement")
+        if primary_placement is not None:
+            primary_placement = render.render_template(str(primary_placement), variables, task_definition_config_env)
+            try:
+                primary_placement = bool(strtobool(primary_placement))
+            except ValueError:
+                raise ParameterInvalidException("Service `{service_name}` parameter `primaryPlacement` must be bool"
+                                                .format(service_name=service_name))
+            if primary_placement:
+                env.append({"name": "PRIMARY_PLACEMENT", "value": "true"})
+
         task_definition_template = service_config.get("taskDefinitionTemplate")
         if task_definition_template is None:
             raise ParameterNotFoundException("Service `{service_name}` requires parameter `taskDefinitionTemplate`"
@@ -376,6 +381,7 @@ def get_service_list_yaml(
             Service(
                 task_definition=task_definition,
                 stop_before_deploy=stop_before_deploy,
+                primary_placement=primary_placement,
                 placement_strategy=placement_strategy_list
             )
         )

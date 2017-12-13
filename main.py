@@ -44,10 +44,6 @@ def init():
                                 action='store_true')
     service_parser.add_argument('--no-delete-unused-service', dest='delete_unused_service', default=True,
                                 action='store_false')
-    service_parser.add_argument('--placement-strategy-binpack-first', dest='placement_strategy_binpack_first',
-                                default=True, action='store_true')
-    service_parser.add_argument('--no-placement-strategy-binpack-first', dest='placement_strategy_binpack_first',
-                                default=True, action='store_false')
 
     test_templates_parser = subparser.add_parser("test-templates")
     test_templates_parser.add_argument('--task-definition-template-dir')

@@ -10,7 +10,7 @@ services:
     maximumPercent: 200
     taskDefinitionTemplate: app
 
-  test-binpack:
+  test-primary:
     cluster: "{{cluster_app}}"
     serviceGroup: service
     templateGroup: sample
@@ -18,9 +18,7 @@ services:
     minimumHealthyPercent: 50
     maximumPercent: 200
     taskDefinitionTemplate: app
-    placementStrategy:
-      - field: memory
-        type: binpack
+    primaryPlacement: True
 
   test-stop-before:
     cluster: "{{cluster_app}}"
@@ -32,7 +30,7 @@ services:
     taskDefinitionTemplate: app
     stopBeforeDeploy: True
 
-  test-binpack-stop-before:
+  test-primary-stop-before:
     cluster: "{{cluster_app}}"
     serviceGroup: service
     templateGroup: sample
@@ -41,9 +39,6 @@ services:
     maximumPercent: 200
     taskDefinitionTemplate: app
     stopBeforeDeploy: True
-    placementStrategy:
-      - field: memory
-        type: binpack
 
 scheduledTasks:
   test:
