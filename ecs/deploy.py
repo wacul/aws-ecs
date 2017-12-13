@@ -9,7 +9,7 @@ from queue import Queue, Empty
 from random import randint
 from threading import Thread
 from botocore.exceptions import ClientError, WaiterError
-from ruamel.yaml import YAML
+import yaml
 
 import render
 from aws import AwsUtils, ServiceNotFoundException, CloudwatchEventRuleNotFoundException
@@ -623,7 +623,6 @@ def test_templates(args):
     files = os.listdir(args.environment_yaml_dir)
     if files is None or len(files) == 0:
         raise Exception("environment yaml file not found.")
-    yaml = YAML(typ="safe")
     services_config = yaml.load(args.services_yaml)
     for f in files:
         file_path = os.path.join(args.environment_yaml_dir, f)
@@ -668,7 +667,6 @@ def get_deploy_list(
     scheduled_task_list = []
     deploy_scheduled_task_list = []
     if services_yaml:
-        yaml = YAML(typ="safe")
         services_config = yaml.load(services_yaml)
         environment_config = yaml.load(environment_yaml)
 
