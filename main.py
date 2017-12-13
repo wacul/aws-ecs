@@ -36,13 +36,18 @@ def init():
     service_parser.add_argument('--service-zero-keep', dest='service_zero_keep', default=True, action='store_true')
     service_parser.add_argument('--no-service-zero-keep', dest='service_zero_keep', default=True, action='store_false')
     service_parser.add_argument('--stop-before-deploy', dest='stop_before_deploy', default=True, action='store_true')
-    service_parser.add_argument('--no-stop-before-deploy', dest='stop_before_deploy', default=True, action='store_false')
+    service_parser.add_argument('--no-stop-before-deploy', dest='stop_before_deploy',
+                                default=True, action='store_false')
     service_parser.add_argument('--template-group')
     service_parser.add_argument('--deploy-service-group')
     service_parser.add_argument('--delete-unused-service', dest='delete_unused_service', default=True,
                                 action='store_true')
     service_parser.add_argument('--no-delete-unused-service', dest='delete_unused_service', default=True,
                                 action='store_false')
+    service_parser.add_argument('--placement-strategy-binpack-first', dest='placement_strategy_binpack_first',
+                                default=True, action='store_true')
+    service_parser.add_argument('--no-placement-strategy-binpack-first', dest='placement_strategy_binpack_first',
+                                default=True, action='store_false')
 
     test_templates_parser = subparser.add_parser("test-templates")
     test_templates_parser.add_argument('--task-definition-template-dir')
@@ -61,7 +66,6 @@ def init():
     delete_parser.add_argument('--threads-count', type=int, default=5)
     delete_parser.add_argument('--service-wait-max-attempts', type=int, default=18)
     delete_parser.add_argument('--service-wait-delay', type=int, default=10)
-
 
     argp = parser.parse_args()
     if argp.command == 'test-templates':

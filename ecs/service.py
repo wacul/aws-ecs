@@ -4,6 +4,7 @@ import logging
 import os
 import copy
 from distutils.util import strtobool
+from typing import List
 
 import jinja2
 from datadiff import diff
@@ -50,7 +51,7 @@ class TaskEnvironment(object):
             elif task_environment['name'] == 'MAXIMUM_PERCENT':
                 self.maximum_percent = int(task_environment['value'])
             elif task_environment['name'] == 'DISTINCT_INSTANCE':
-                self.distinct_instance = strtobool(task_environment['value'])
+                self.distinct_instance = bool(strtobool(task_environment['value']))
         if self.environment is None:
             raise EnvironmentValueNotFoundException(
                 "task definition is lack of environment `ENVIRONMENT`.\ntask definition:\n{task_definition}"
@@ -91,13 +92,14 @@ class DescribeService(Deploy):
 
 
 class Service(Deploy):
-    def __init__(self, task_definition: dict, stop_before_deploy: bool):
+    def __init__(self, task_definition: dict, stop_before_deploy: bool, placement_strategy: List[dict] = None):
         self.task_definition = task_definition
         self.task_environment = TaskEnvironment(task_definition)
         self.family = task_definition['family']
         self.service_name = self.family + '-service'
         self.desired_count = self.task_environment.desired_count
         self.stop_before_deploy = stop_before_deploy
+        self.placement_strategy = placement_strategy
 
         self.origin_task_definition_arn = None
         self.origin_task_definition = None
@@ -136,6 +138,14 @@ class Service(Deploy):
         else:
             t = diff(ad, bd)
             return "    - Container is changed. Diff:\n{t}".format(t=t)
+
+    def is_service_binpack_strategy(self) -> bool:
+        if self.placement_strategy is None:
+            return False
+        for strategy in self.placement_strategy:
+            if strategy["type"] == "binpack":
+                return True
+        return False
 
 
 def arn_to_name(arn):
@@ -203,7 +213,11 @@ def get_service_list_yaml(
     task_definition_template_dict = services_config["taskDefinitionTemplates"]
 
     service_list = []
+    service_name_list = []
     for service_name in services:
+        if service_name in service_name_list:
+            raise Exception("'%s' is duplicate service." % service_name)
+        service_name_list.append(service_name)
         # 設定値と変数を取得
         service_config, variables = __get_service_variables(
             service_name=service_name,
@@ -218,7 +232,7 @@ def get_service_list_yaml(
         if registrator is not None:
             registrator = render.render_template(str(registrator), variables, task_definition_config_env)
             try:
-                registrator = strtobool(registrator)
+                registrator = bool(strtobool(registrator))
             except ValueError:
                 raise ParameterInvalidException(
                     "Service `{service_name}` parameter `registrator` must be bool".format(service_name=service_name)
@@ -284,12 +298,22 @@ def get_service_list_yaml(
         if distinct_instance is not None:
             distinct_instance = render.render_template(str(distinct_instance), variables, task_definition_config_env)
             try:
-                distinct_instance = strtobool(distinct_instance)
+                distinct_instance = bool(strtobool(distinct_instance))
             except ValueError:
                 raise ParameterInvalidException("Service `{service_name}` parameter `distinctInstance` must be bool"
                                                 .format(service_name=service_name))
             if distinct_instance:
                 env.append({"name": "DISTINCT_INSTANCE", "value": "true"})
+
+        placement_strategy = service_config.get("placementStrategy")
+        placement_strategy_list = None
+        if placement_strategy is not None:
+            placement_strategy_list = []
+            for strategy in placement_strategy:
+                strategy = render.render_template(json.dumps(strategy), variables, task_definition_config_env)
+                strategy = json.loads(strategy)
+                placement_strategy_list.append(strategy)
+            env.append({"name": "PLACEMENT_STRATEGY", "value": str(placement_strategy)})
 
         task_definition_template = service_config.get("taskDefinitionTemplate")
         if task_definition_template is None:
@@ -329,7 +353,7 @@ def get_service_list_yaml(
         if disabled is not None:
             disabled = render.render_template(str(disabled), variables, task_definition_config_env)
             try:
-                disabled = strtobool(disabled)
+                disabled = bool(strtobool(disabled))
             except ValueError:
                 raise ParameterInvalidException("Service `{service_name}` parameter `disabled` must be bool"
                                                 .format(service_name=service_name))
@@ -341,15 +365,20 @@ def get_service_list_yaml(
         if stop_before_deploy is not None:
             stop_before_deploy = render.render_template(str(stop_before_deploy), variables, task_definition_config_env)
             try:
-                stop_before_deploy = strtobool(stop_before_deploy)
+                stop_before_deploy = bool(strtobool(stop_before_deploy))
             except ValueError:
                 raise ParameterInvalidException("Service `{service_name}` parameter `stop_before_deploy` must be bool"
                                                 .format(service_name=service_name))
         else:
             stop_before_deploy = False
 
-        service_list.append(Service(task_definition=task_definition, stop_before_deploy=stop_before_deploy))
-
+        service_list.append(
+            Service(
+                task_definition=task_definition,
+                stop_before_deploy=stop_before_deploy,
+                placement_strategy=placement_strategy_list
+            )
+        )
     return service_list
 
 

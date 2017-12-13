@@ -9,7 +9,7 @@ from queue import Queue, Empty
 from random import randint
 from threading import Thread
 from botocore.exceptions import ClientError, WaiterError
-import yaml
+from ruamel.yaml import YAML
 
 import render
 from aws import AwsUtils, ServiceNotFoundException, CloudwatchEventRuleNotFoundException
@@ -17,12 +17,12 @@ from ecs.classes import ProcessMode, ProcessStatus, VariableNotFoundException
 from ecs.scheduled_tasks import ScheduledTask, get_scheduled_task_list, get_deploy_scheduled_task_list, \
     CloudwatchEventRule, CloudWatchEventState, scheduled_task_managed_description
 import ecs.service
-from ecs.utils import h1, success, error, info
+from ecs.utils import h1, h2, success, error, info
 
 
 class DeployProcess(Thread):
     def __init__(self, task_queue, key, secret, region, is_service_zero_keep, is_stop_before_deploy,
-                 service_wait_max_attempts, service_wait_delay):
+                 service_wait_max_attempts, service_wait_delay, is_placement_strategy_binpack_first):
         super().__init__()
         self.task_queue = task_queue
         self.awsutils = AwsUtils(access_key=key, secret_key=secret, region=region)
@@ -30,6 +30,7 @@ class DeployProcess(Thread):
         self.is_stop_before_deploy = is_stop_before_deploy
         self.service_wait_max_attempts = service_wait_max_attempts
         self.service_wait_delay = service_wait_delay
+        self.is_placement_strategy_binpack_first = is_placement_strategy_binpack_first
 
     def run(self):
         while True:
@@ -213,7 +214,8 @@ class DeployProcess(Thread):
             desired_count=service.task_environment.desired_count,
             maximum_percent=service.task_environment.maximum_percent,
             minimum_healthy_percent=service.task_environment.minimum_healthy_percent,
-            distinct_instance=service.task_environment.distinct_instance
+            distinct_instance=service.task_environment.distinct_instance,
+            placement_strategy=service.placement_strategy
         )
         service.update(res_service)
 
@@ -292,18 +294,25 @@ class DeployManager(object):
         self.error = False
 
         self.delete_service_list = []
+        self.all_service_list = []
+        self.all_deploy_target_service_list = []
+        self.binpack_first_stop_before_deploy_service_list = []
+        self.stop_before_deploy_service_list = []
+        self.binpack_first_deploy_service_list = []
+        self.remain_deploy_service_list = []
         self.delete_scheduled_task_list = []
-        self.service_list = []
         self.scheduled_task_list = []
+
         self.environment = None
         self.template_group = None
         self.is_service_zero_keep = True
         self.is_stop_before_deploy = True
         self.is_delete_unused_service = True
+        self.is_placement_strategy_binpack_first = True
 
     def _service_config(self):
-        self.service_list,\
-            self.deploy_service_list,\
+        self.all_service_list,\
+            self.all_deploy_target_service_list,\
             self.scheduled_task_list,\
             self.deploy_scheduled_task_list,\
             self.environment = get_deploy_list(
@@ -316,13 +325,27 @@ class DeployManager(object):
                     template_group=self._args.template_group
                 )
         # thread数がタスクの数を超えているなら減らす
-        deploy_size = len(self.deploy_scheduled_task_list) + len(self.deploy_service_list)
+        deploy_size = len(self.deploy_scheduled_task_list) + len(self.all_deploy_target_service_list)
         if deploy_size < self.threads_count:
             self.threads_count = deploy_size
         self.is_service_zero_keep = self._args.service_zero_keep
         self.template_group = self._args.template_group
         self.is_delete_unused_service = self._args.delete_unused_service
         self.is_stop_before_deploy = self._args.stop_before_deploy
+        self.is_placement_strategy_binpack_first = self._args.placement_strategy_binpack_first
+
+    def _set_deploy_list(self):
+        for service in self.all_deploy_target_service_list:
+            if self.is_stop_before_deploy and service.stop_before_deploy and service.origin_desired_count > 0:
+                if self.is_placement_strategy_binpack_first and service.is_service_binpack_strategy():
+                    self.binpack_first_stop_before_deploy_service_list.append(service)
+                else:
+                    self.stop_before_deploy_service_list.append(service)
+            else:
+                if self.is_placement_strategy_binpack_first and service.is_service_binpack_strategy():
+                    self.binpack_first_deploy_service_list.append(service)
+                else:
+                    self.remain_deploy_service_list.append(service)
 
     def _start_threads(self):
         # threadの開始
@@ -335,7 +358,8 @@ class DeployManager(object):
                 is_service_zero_keep=self.is_service_zero_keep,
                 is_stop_before_deploy=self.is_stop_before_deploy,
                 service_wait_max_attempts=self.service_wait_max_attempts,
-                service_wait_delay=self.service_wait_delay
+                service_wait_delay=self.service_wait_delay,
+                is_placement_strategy_binpack_first=self.is_placement_strategy_binpack_first
             )
             thread.setDaemon(True)
             thread.start()
@@ -348,17 +372,12 @@ class DeployManager(object):
         # Step: Delete Unused Service
         self._delete_unused()
         self._check_deploy()
+        self._set_deploy_list()
 
         self._stop_scheduled_task()
-        stop_before_deploy_service_list = get_stop_before_deploy_list(self.service_list)
-        if self.is_stop_before_deploy:
-            self._stop_before_deploy(stop_before_deploy_service_list)
-            self._wait_for_stable(stop_before_deploy_service_list)
+        self._stop_before_deploy()
         self._deploy_service()
-        self._wait_for_stable(self.deploy_service_list)
-        if self.is_stop_before_deploy:
-            self._start_after_deploy(stop_before_deploy_service_list)
-            self._wait_for_stable(stop_before_deploy_service_list)
+        self._start_after_deploy()
         self._deploy_scheduled_task()
 
         self._result_check()
@@ -372,6 +391,7 @@ class DeployManager(object):
         self._delete_unused(dry_run=True)
         # Step: Check Service
         self._check_deploy()
+        self._set_deploy_list()
 
     def delete(self):
         self.environment = self._args.environment
@@ -399,19 +419,34 @@ class DeployManager(object):
                 self.task_queue.put([task, ProcessMode.stopScheduledTask])
             self.task_queue.join()
 
-    def _stop_before_deploy(self, service_list):
-        if len(service_list) > 0:
+    def _stop_before_deploy(self):
+        if len(self.binpack_first_stop_before_deploy_service_list) > 0 \
+                or len(self.stop_before_deploy_service_list) > 0:
             h1("Step: Stop ECS Service Before Deploy")
-            for service in service_list:
+            for service in self.binpack_first_stop_before_deploy_service_list:
+                self.task_queue.put([service, ProcessMode.stopBeforeDeploy])
+            for service in self.stop_before_deploy_service_list:
                 self.task_queue.put([service, ProcessMode.stopBeforeDeploy])
             self.task_queue.join()
+            h2("Wait for Service Status 'Stable'")
+            self._wait_for_stable(self.binpack_first_stop_before_deploy_service_list)
+            self._wait_for_stable(self.stop_before_deploy_service_list)
 
-    def _start_after_deploy(self, service_list):
-        if len(service_list) > 0:
-            h1("Step: Start ECS Service After Deploy")
-            for service in service_list:
+    def _start_after_deploy(self):
+        if len(self.binpack_first_stop_before_deploy_service_list) > 0:
+            h1("Step: Start Binpack ECS Service After Deploy")
+            for service in self.binpack_first_stop_before_deploy_service_list:
                 self.task_queue.put([service, ProcessMode.startAfterDeploy])
             self.task_queue.join()
+            h2("Wait for Service Status 'Stable'")
+            self._wait_for_stable(self.binpack_first_stop_before_deploy_service_list)
+        if len(self.stop_before_deploy_service_list) > 0:
+            h1("Step: Start ECS Service After Deploy")
+            for service in self.stop_before_deploy_service_list:
+                self.task_queue.put([service, ProcessMode.startAfterDeploy])
+            self.task_queue.join()
+            h2("Wait for Service Status 'Stable'")
+            self._wait_for_stable(self.stop_before_deploy_service_list)
 
     def _deploy_scheduled_task(self):
         if len(self.deploy_scheduled_task_list) > 0:
@@ -446,8 +481,10 @@ class DeployManager(object):
     def _fetch_ecs_information(self, is_all=False):
         h1("Step: Fetch ECS Information")
         describe_service_list = []
-        if len(self.service_list) > 0 or is_all:
-            describe_service_list = ecs.service.fetch_aws_service(cluster_list=self.cluster_list, awsutils=self.awsutils)
+        if len(self.all_service_list) > 0 or is_all:
+            describe_service_list = ecs.service.fetch_aws_service(
+                cluster_list=self.cluster_list, awsutils=self.awsutils
+            )
             for s in describe_service_list:
                 self.task_queue.put([s, ProcessMode.fetchServices])
         cloud_watch_rule_list = []
@@ -472,7 +509,7 @@ class DeployManager(object):
                 if self.template_group != describe_service.task_environment.template_group:
                     continue
             is_delete = True
-            for service in self.service_list:
+            for service in self.all_service_list:
                 if service.service_name == describe_service.service_name:
                     if service.task_environment.cluster_name == describe_service.cluster_name:
                         service.set_from_describe_service(describe_service=describe_service)
@@ -497,15 +534,30 @@ class DeployManager(object):
         success("Check succeeded")
 
     def _deploy_service(self):
-        if len(self.deploy_service_list) > 0:
-            h1("Step: Deploy ECS Service")
-            for service in self.deploy_service_list:
+        if len(self.binpack_first_deploy_service_list):
+            h1("Step: Deploy Binpack ECS Service")
+            for service in self.binpack_first_deploy_service_list:
                 self.task_queue.put([service, ProcessMode.deployService])
             self.task_queue.join()
+            h2("Wait for Service Status 'Stable'")
+            self._wait_for_stable(self.binpack_first_deploy_service_list)
+        if len(self.binpack_first_stop_before_deploy_service_list) > 0 \
+            or len(self.stop_before_deploy_service_list) > 0 \
+            or len(self.remain_deploy_service_list) > 0:
+            h1("Step: Deploy ECS Service")
+            for service in self.remain_deploy_service_list:
+                self.task_queue.put([service, ProcessMode.deployService])
+            for service in self.binpack_first_stop_before_deploy_service_list:
+                self.task_queue.put([service, ProcessMode.deployService])
+            for service in self.stop_before_deploy_service_list:
+                self.task_queue.put([service, ProcessMode.deployService])
+            self.task_queue.join()
+            h2("Wait for Service Status 'Stable'")
+            self._wait_for_stable(self.remain_deploy_service_list)
 
     def _check_deploy(self):
         h1("Step: Check Deploy ECS Service and Scheduled tasks")
-        for service in self.deploy_service_list:
+        for service in self.all_deploy_target_service_list:
             self.task_queue.put([service, ProcessMode.checkDeployService])
         for scheduled_task in self.deploy_scheduled_task_list:
             self.task_queue.put([scheduled_task, ProcessMode.checkDeployScheduledTask])
@@ -513,14 +565,13 @@ class DeployManager(object):
 
     def _wait_for_stable(self, service_list: list):
         if len(service_list) > 0:
-            h1("Step: Wait for Service Status 'Stable'")
-        for service in service_list:
-            self.task_queue.put([service, ProcessMode.waitForStable])
+            for service in service_list:
+                self.task_queue.put([service, ProcessMode.waitForStable])
         self.task_queue.join()
 
     def _result_check(self):
         error_service_list = list(filter(
-            lambda service: service.status == ProcessStatus.error, self.deploy_service_list
+            lambda service: service.status == ProcessStatus.error, self.all_deploy_target_service_list
         ))
         error_scheduled_task_list = list(filter(
             lambda task: task.status == ProcessStatus.error, self.deploy_scheduled_task_list
@@ -530,14 +581,6 @@ class DeployManager(object):
             sys.exit(1)
         if self.error:
             sys.exit(1)
-
-
-def get_stop_before_deploy_list(service_list: list) -> list:
-    stop_before_deploy_list = []
-    for service in service_list:
-        if service.stop_before_deploy and service.origin_desired_count > 0:
-            stop_before_deploy_list.append(service)
-    return stop_before_deploy_list
 
 
 def deregister_task_definition(awsutils, service: ecs.service.Service):
@@ -583,16 +626,17 @@ def test_templates(args):
     files = os.listdir(args.environment_yaml_dir)
     if files is None or len(files) == 0:
         raise Exception("environment yaml file not found.")
+    yaml = YAML(typ="safe")
     services_config = yaml.load(args.services_yaml)
     for f in files:
         file_path = os.path.join(args.environment_yaml_dir, f)
         if os.path.isfile(file_path):
             with open(file_path, 'r') as environment_yaml:
-                environment_config = yaml.load(environment_yaml)
+                environment_config = yaml.load(environment_yaml.read())
 
                 environment = environment_config.get("environment")
                 if environment is None:
-                    raise VariableNotFoundException("environment-yaml requires paramter `environment`.")
+                    raise VariableNotFoundException("%s requires parameter `environment`." % file_path)
                 environment = render.render_template(
                     str(environment),
                     environment_config,
@@ -600,6 +644,12 @@ def test_templates(args):
                 )
 
                 ecs.service.get_service_list_yaml(
+                    services_config=services_config,
+                    environment_config=environment_config,
+                    task_definition_config_env=args.task_definition_config_env,
+                    environment=environment
+                )
+                get_scheduled_task_list(
                     services_config=services_config,
                     environment_config=environment_config,
                     task_definition_config_env=args.task_definition_config_env,
@@ -621,6 +671,7 @@ def get_deploy_list(
     scheduled_task_list = []
     deploy_scheduled_task_list = []
     if services_yaml:
+        yaml = YAML(typ="safe")
         services_config = yaml.load(services_yaml)
         environment_config = yaml.load(environment_yaml)
 

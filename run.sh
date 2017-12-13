@@ -99,7 +99,9 @@ fi
 if [ ! -z "$WERCKER_AWS_ECS_SERVICE_WAIT_DELAY" ]; then
   SERVICE_WAIT_DELAY="--service-wait-delay $WERCKER_AWS_ECS_SERVICE_WAIT_DELAY"
 fi
-
+if [ "$WERCKER_AWS_ECS_PLACEMENT_STRATEGY_BINPACK_FIRST" == 'false' ]; then
+  NO_PLACEMENT_STRATEGY_BINPACK_FIRST="--no-placement-strategy-binpack-first"
+fi
 
 
 
@@ -120,5 +122,6 @@ else
         $NO_STOP_BEFORE_DEPLOY \
         $TASK_DEFINITION \
         $SERVICE_WAIT_MAX_ATTEMPTS \
-        $SERVICE_WAIT_DELAY
+        $SERVICE_WAIT_DELAY \
+        $NO_PLACEMENT_STRATEGY_BINPACK_FIRST
 fi

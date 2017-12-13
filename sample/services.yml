@@ -1,7 +1,7 @@
 ---
 
 services:
-  testroop:
+  test:
     cluster: "{{cluster_app}}"
     serviceGroup: service
     templateGroup: sample
@@ -9,15 +9,51 @@ services:
     minimumHealthyPercent: 50
     maximumPercent: 200
     taskDefinitionTemplate: app
-    stopBeforeDeploy: true
+
+  test-binpack:
+    cluster: "{{cluster_app}}"
+    serviceGroup: service
+    templateGroup: sample
+    desiredCount: 1
+    minimumHealthyPercent: 50
+    maximumPercent: 200
+    taskDefinitionTemplate: app
+    placementStrategy:
+      - field: memory
+        type: binpack
+
+  test-stop-before:
+    cluster: "{{cluster_app}}"
+    serviceGroup: service
+    templateGroup: sample
+    desiredCount: 1
+    minimumHealthyPercent: 50
+    maximumPercent: 200
+    taskDefinitionTemplate: app
+    stopBeforeDeploy: True
+
+  test-binpack-stop-before:
+    cluster: "{{cluster_app}}"
+    serviceGroup: service
+    templateGroup: sample
+    desiredCount: 1
+    minimumHealthyPercent: 50
+    maximumPercent: 200
+    taskDefinitionTemplate: app
+    stopBeforeDeploy: True
+    placementStrategy:
+      - field: memory
+        type: binpack
 
 scheduledTasks:
-  test3:
+  test:
     cluster: "{{cluster_spot_batch}}"
-    serviceGroup: btch
+    serviceGroup: batch
     templateGroup: sample
     taskCount: 1
-    placementStrategy: '[{"field": "memory", "type": "binpack"}]'
+    placementStrategy:
+      - field: memory
+        type: binpack
     cloudwatchEvent:
       scheduleExpression: rate(5 minutes)
       targetLambdaArn: "{{targetLambdaArn}}"
@@ -25,6 +61,7 @@ scheduledTasks:
     vars:
       cpu: 64
       memory: 64
+
 
 taskDefinitionTemplates:
   app: |
@@ -48,8 +85,6 @@ taskDefinitionTemplates:
               "tag": "docker/{{environment}}/{{item}}/{% raw %}{{.ID}}{% endraw %}"
             }
           },
-          "volumesFrom": [],
-          "mountPoints": [],
           "essential": true
         }
       ]
@@ -62,7 +97,7 @@ taskDefinitionTemplates:
           "name": "{{environment}}-{{item}}",
           "cpu": {{cpu}},
           "memoryReservation": {{memoryReservation}},
-          "image": "quay.io/wacul/ai-analyst-back-base:test",
+          "image": "alpine",
           "command": [
             "sleep",
             "360;",

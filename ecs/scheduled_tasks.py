@@ -211,7 +211,11 @@ def get_scheduled_task_list(services_config,
     task_definition_template_dict = services_config["taskDefinitionTemplates"]
 
     scheduled_task_list = []
+    scheduled_task_name_list = []
     for task_name in scheduled_tasks:
+        if task_name in scheduled_task_list:
+            raise Exception("'%s' is duplicate task." % task_name)
+        scheduled_task_name_list.append(task_name)
         # 設定値と変数を取得
         task_config, variables = __get_variables(
             task_name=task_name,
@@ -252,9 +256,14 @@ def get_scheduled_task_list(services_config,
         env.append({"name": "TASK_COUNT", "value": task_count})
 
         placement_strategy = task_config.get("placementStrategy")
+        placement_strategy_list = None
         if placement_strategy is not None:
-            placement_strategy = render.render_template(str(placement_strategy), variables, task_definition_config_env)
-        env.append({"name": "PLACEMENT_STRATEGY", "value": placement_strategy})
+            placement_strategy_list = []
+            for strategy in placement_strategy:
+                strategy = render.render_template(json.dumps(strategy), variables, task_definition_config_env)
+                strategy = json.loads(strategy)
+                placement_strategy_list.append(strategy)
+            env.append({"name": "PLACEMENT_STRATEGY", "value": str(placement_strategy)})
 
         cloudwatch_event = task_config.get('cloudwatchEvent')
         if cloudwatch_event is None:
@@ -320,7 +329,7 @@ def get_scheduled_task_list(services_config,
         if disabled is not None:
             disabled = render.render_template(str(disabled), variables, task_definition_config_env)
             try:
-                disabled = strtobool(disabled)
+                disabled = bool(strtobool(disabled))
             except ValueError:
                 raise ParameterInvalidException("Scheduled Task `{task_name}` parameter `disabled` must be bool"
                                                 .format(task_name=task_name))

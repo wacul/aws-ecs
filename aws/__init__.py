@@ -123,7 +123,7 @@ class AwsUtils(object):
         return services
 
     def create_service(self, cluster, service, task_definition, desired_count,
-                       maximum_percent, minimum_healthy_percent, distinct_instance):
+                       maximum_percent, minimum_healthy_percent, distinct_instance, placement_strategy):
         """
         Create service
         :param cluster: the cluster name
@@ -133,35 +133,67 @@ class AwsUtils(object):
         :param maximum_percent: maximumPercent
         :param minimum_healthy_percent: minimumHealthyPercent
         :param distinct_instance: placementConstraints distictInstance
+        :param placement_strategy: placementStrategy
         :return: the response or raise an Exception
         """
         if distinct_instance:
-            response = self.client.create_service(
-                cluster=cluster,
-                serviceName=service,
-                taskDefinition=task_definition,
-                desiredCount=desired_count,
-                deploymentConfiguration={
-                    'maximumPercent': maximum_percent,
-                    'minimumHealthyPercent': minimum_healthy_percent
-                },
-                placementConstraints=[
-                    {
-                        'type': 'distinctInstance'
-                    }
-                ]
-            )
+            if placement_strategy:
+                response = self.client.create_service(
+                    cluster=cluster,
+                    serviceName=service,
+                    taskDefinition=task_definition,
+                    desiredCount=desired_count,
+                    deploymentConfiguration={
+                        'maximumPercent': maximum_percent,
+                        'minimumHealthyPercent': minimum_healthy_percent
+                    },
+                    placementConstraints=[
+                        {
+                            'type': 'distinctInstance'
+                        }
+                    ],
+                    placementStrategy=placement_strategy
+                )
+            else:
+                response = self.client.create_service(
+                    cluster=cluster,
+                    serviceName=service,
+                    taskDefinition=task_definition,
+                    desiredCount=desired_count,
+                    deploymentConfiguration={
+                        'maximumPercent': maximum_percent,
+                        'minimumHealthyPercent': minimum_healthy_percent
+                    },
+                    placementConstraints=[
+                        {
+                            'type': 'distinctInstance'
+                        }
+                    ],
+                )
         else:
-            response = self.client.create_service(
-                cluster=cluster,
-                serviceName=service,
-                taskDefinition=task_definition,
-                desiredCount=desired_count,
-                deploymentConfiguration={
-                    'maximumPercent': maximum_percent,
-                    'minimumHealthyPercent': minimum_healthy_percent
-                }
-            )
+            if placement_strategy:
+                response = self.client.create_service(
+                    cluster=cluster,
+                    serviceName=service,
+                    taskDefinition=task_definition,
+                    desiredCount=desired_count,
+                    deploymentConfiguration={
+                        'maximumPercent': maximum_percent,
+                        'minimumHealthyPercent': minimum_healthy_percent
+                    },
+                    placementStrategy=placement_strategy
+                )
+            else:
+                response = self.client.create_service(
+                    cluster=cluster,
+                    serviceName=service,
+                    taskDefinition=task_definition,
+                    desiredCount=desired_count,
+                    deploymentConfiguration={
+                        'maximumPercent': maximum_percent,
+                        'minimumHealthyPercent': minimum_healthy_percent
+                    }
+                )
         failures = response.get('failures')
         if failures:
             raise Exception("Service '{service}' is {failures} in cluster '{cluster}'"
