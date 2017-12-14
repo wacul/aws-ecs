@@ -4,7 +4,6 @@ import logging
 import os
 import copy
 from distutils.util import strtobool
-from typing import List
 
 import jinja2
 from datadiff import diff
@@ -93,7 +92,7 @@ class DescribeService(Deploy):
 
 class Service(Deploy):
     def __init__(self, task_definition: dict, stop_before_deploy: bool, primary_placement: bool,
-                 placement_strategy: List[dict] = None):
+                 placement_strategy: list = None):
         self.task_definition = task_definition
         self.task_environment = TaskEnvironment(task_definition)
         self.family = task_definition['family']
