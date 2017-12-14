@@ -417,17 +417,21 @@ class DeployManager(object):
             self.task_queue.join()
 
     def _stop_before_deploy(self):
-        if len(self.primary_stop_before_deploy_service_list) > 0 \
-                or len(self.stop_before_deploy_service_list) > 0:
+        unstopped_primary_stop_before_deploy_service_list = \
+            [x for x in self.primary_stop_before_deploy_service_list if x.desired_count > 0]
+        unstopped_stop_before_deploy_service_list = \
+            [x for x in self.stop_before_deploy_service_list if x.desired_count > 0]
+        if len(unstopped_primary_stop_before_deploy_service_list) > 0 \
+                or len(unstopped_stop_before_deploy_service_list) > 0:
             h1("Step: Stop ECS Service Before Deploy")
-            for service in self.primary_stop_before_deploy_service_list:
+            for service in unstopped_primary_stop_before_deploy_service_list:
                 self.task_queue.put([service, ProcessMode.stopBeforeDeploy])
-            for service in self.stop_before_deploy_service_list:
+            for service in unstopped_stop_before_deploy_service_list:
                 self.task_queue.put([service, ProcessMode.stopBeforeDeploy])
             self.task_queue.join()
             h2("Wait for Service Status 'Stable'")
-            self._wait_for_stable(self.primary_stop_before_deploy_service_list)
-            self._wait_for_stable(self.stop_before_deploy_service_list)
+            self._wait_for_stable(unstopped_primary_stop_before_deploy_service_list)
+            self._wait_for_stable(unstopped_stop_before_deploy_service_list)
 
     def _start_after_deploy(self):
         if len(self.primary_stop_before_deploy_service_list) > 0:
