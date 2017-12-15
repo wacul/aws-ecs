@@ -418,9 +418,9 @@ class DeployManager(object):
 
     def _stop_before_deploy(self):
         unstopped_primary_stop_before_deploy_service_list = \
-            [x for x in self.primary_stop_before_deploy_service_list if x.desired_count > 0]
+            [x for x in self.primary_stop_before_deploy_service_list if x.origin_desired_count > 0]
         unstopped_stop_before_deploy_service_list = \
-            [x for x in self.stop_before_deploy_service_list if x.desired_count > 0]
+            [x for x in self.stop_before_deploy_service_list if x.origin_desired_count > 0]
         if len(unstopped_primary_stop_before_deploy_service_list) > 0 \
                 or len(unstopped_stop_before_deploy_service_list) > 0:
             h1("Step: Stop ECS Service Before Deploy")
