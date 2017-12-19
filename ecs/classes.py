@@ -11,7 +11,6 @@ class ProcessMode(enum.Enum):
     deployScheduledTask = 13
     stopScheduledTask = 14
     stopBeforeDeploy = 15
-    startAfterDeploy = 16
 
 
 class ProcessStatus(enum.Enum):
