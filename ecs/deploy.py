@@ -601,13 +601,14 @@ def wait_for_stable(awsutils, service: ecs.service.Service, delay: int, max_atte
             max_attempts=max_attempts,
             delay=delay
         )
-    except WaiterError:
-        error("service '{service.service_name}' update wait timeout.".format(service=service))
-        sys.exit(1)
-    service.update(res_service)
-    deregister_task_definition(awsutils, service)
-    success("service '{service.service_name}' ({service.running_count:d} / {service.desired_count}) update completed."
+        service.update(res_service)
+        deregister_task_definition(awsutils, service)
+        success(
+            "service '{service.service_name}' ({service.running_count:d} / {service.desired_count}) update completed."
             .format(service=service))
+    except WaiterError:
+        service.status = ProcessStatus.error
+        error("service '{service.service_name}' update wait timeout.".format(service=service))
 
 
 def test_templates(args):
