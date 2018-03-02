@@ -62,6 +62,7 @@ def init():
     delete_parser.add_argument('--threads-count', type=int, default=5)
     delete_parser.add_argument('--service-wait-max-attempts', type=int, default=60)
     delete_parser.add_argument('--service-wait-delay', type=int, default=10)
+    delete_parser.add_argument('--force', action='store_true', default=False)
 
     argp = parser.parse_args()
     if argp.command == 'test-templates':

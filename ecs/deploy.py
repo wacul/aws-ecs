@@ -301,6 +301,7 @@ class DeployManager(object):
         self.is_service_zero_keep = True
         self.is_stop_before_deploy = True
         self.is_delete_unused_service = True
+        self.force = False
 
     def _service_config(self):
         self.all_service_list,\
@@ -391,6 +392,7 @@ class DeployManager(object):
 
     def delete(self):
         self.environment = self._args.environment
+        self.force = self._args.force
         self._start_threads()
         self._fetch_ecs_information(is_all=True)
 
@@ -403,9 +405,10 @@ class DeployManager(object):
         for task in self.delete_scheduled_task_list:
             print("* %s" % task.family)
 
-        reply = input("\nWould you like delete all ecs service in %s (y/n)\n" % self.environment)
-        if reply != 'y':
-            return
+        if not self.force:
+            reply = input("\nWould you like delete all ecs service in %s (y/n)\n" % self.environment)
+            if reply != 'y':
+                return
         self._delete_unused()
 
     def _stop_scheduled_task(self):
