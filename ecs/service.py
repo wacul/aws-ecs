@@ -65,6 +65,14 @@ class TaskEnvironment(object):
                 .format(task_definition=task_definition))
 
 
+class LoadBalancer(object):
+    def __init__(self, target_group_arn, load_balancer_name, container_name, container_port):
+        self.target_group_arn = target_group_arn
+        self.load_balancer_name = load_balancer_name
+        self.container_name = container_name
+        self.container_port = container_port
+
+
 class DescribeService(Deploy):
     def __init__(self, service_description: dict):
         self.service_name = service_description['serviceName']
@@ -92,7 +100,7 @@ class DescribeService(Deploy):
 
 class Service(Deploy):
     def __init__(self, task_definition: dict, stop_before_deploy: bool, primary_placement: bool,
-                 placement_strategy: list = None):
+                 placement_strategy: list = None, load_balancers: list = None):
         self.task_definition = task_definition
         self.task_environment = TaskEnvironment(task_definition)
         self.family = task_definition['family']
@@ -101,6 +109,7 @@ class Service(Deploy):
         self.stop_before_deploy = stop_before_deploy
         self.placement_strategy = placement_strategy
         self.is_primary_placement = primary_placement
+        self.load_balancers = load_balancers
 
         self.origin_task_definition_arn = None
         self.origin_task_definition = None
@@ -342,6 +351,41 @@ def get_service_list_yaml(
             raise Exception(
                 "Service `{service}`: {e.__class__.__name__} {e}\njson:\n{json}".format(service=service_name, e=e,
                                                                                         json=task_definition_data))
+        load_balancers = service_config.get("loadBalancers")
+        rendered_balancers = None
+        if load_balancers is not None:
+            rendered_balancers = []
+            for balancer in load_balancers:
+                target_group_arn = balancer.get('targetGroupArn')
+                if target_group_arn is None:
+                    raise ParameterInvalidException("Service `{service_name}` parameter `loadBalancers`"
+                                                    " required `targetGroupArn`"
+                                                    .format(service_name=service_name))
+                target_group_arn = render.render_template(str(target_group_arn), variables, task_definition_config_env)
+                load_balancer_name = balancer.get('loadBalancerName')
+                if load_balancer_name is None:
+                    raise ParameterInvalidException("Service `{service_name}` parameter `loadBalancers`"
+                                                    " required `loadBalancerName`"
+                                                    .format(service_name=service_name))
+                load_balancer_name = render.render_template(str(load_balancer_name), variables,
+                                                            task_definition_config_env)
+                container_name = balancer.get('containerName')
+                if container_name is None:
+                    raise ParameterInvalidException("Service `{service_name}` parameter `loadBalancers`"
+                                                    " required `containerName`"
+                                                    .format(service_name=service_name))
+                container_name = render.render_template(str(container_name), variables, task_definition_config_env)
+                container_port = balancer.get('containerPort')
+                if container_port is None:
+                    raise ParameterInvalidException("Service `{service_name}` parameter `loadBalancers`"
+                                                    " required `containerPort`"
+                                                    .format(service_name=service_name))
+                container_port = render.render_template(str(container_port), variables, task_definition_config_env)
+                rendered_balancers.append(LoadBalancer(target_group_arn=target_group_arn,
+                                                       load_balancer_name=load_balancer_name,
+                                                       container_name=container_name,
+                                                       container_port=container_port))
+            env.append({"name": "LOAD_BALANCER", "value": "true"})
 
         # set parameters to docker environment
         for container_definitions in task_definition.get("containerDefinitions"):
@@ -381,7 +425,8 @@ def get_service_list_yaml(
                 task_definition=task_definition,
                 stop_before_deploy=stop_before_deploy,
                 primary_placement=primary_placement,
-                placement_strategy=placement_strategy_list
+                placement_strategy=placement_strategy_list,
+                load_balancers=rendered_balancers
             )
         )
     return service_list

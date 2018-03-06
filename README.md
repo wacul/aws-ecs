@@ -95,7 +95,12 @@ services:
 * `disabled` (optional): if parameter is true, scheduled task is disabled. (default: False)
 * `stopBeforeDeploy` (optional): if this parameter is true, stop service before ecs service update. (default: False)
 * `placementStrategy` (optional): ecs service run strategy. then set ecs service environment `PLACEMENT_STRATEGY` value.
-* `primaryPlacement` (optional): if this plameter is true, ecs service start up first.
+* `primaryPlacement` (optional): if this parameter is true, ecs service start up first.
+* `loadBlancers` (optional): elb settings. list.
+  * `loadBalancerName`: elb name.
+  * `targetGroupArn`: elb target group arn.
+  * `containerName`: container name to associate with the elb.
+  * `containerPort`: port number to associaate with elb.
 * `vars` (optional): jinja2 template variable settings.
 
 

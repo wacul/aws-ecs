@@ -123,7 +123,7 @@ class AwsUtils(object):
         return services
 
     def create_service(self, cluster, service, task_definition, desired_count,
-                       maximum_percent, minimum_healthy_percent, distinct_instance, placement_strategy):
+                       maximum_percent, minimum_healthy_percent, distinct_instance, placement_strategy, load_balancers):
         """
         Create service
         :param cluster: the cluster name
@@ -134,66 +134,29 @@ class AwsUtils(object):
         :param minimum_healthy_percent: minimumHealthyPercent
         :param distinct_instance: placementConstraints distictInstance
         :param placement_strategy: placementStrategy
+        :param load_balancers: list LoadBalancers
         :return: the response or raise an Exception
         """
+        parameters = {
+            "cluster": cluster,
+            "serviceName": service,
+            "taskDefinition": task_definition,
+            "desiredCount": desired_count,
+            "deploymentConfiguration": {
+                "maximumPercent": maximum_percent,
+                "minimumHealthyPercent": minimum_healthy_percent
+             }
+        }
         if distinct_instance:
-            if placement_strategy:
-                response = self.client.create_service(
-                    cluster=cluster,
-                    serviceName=service,
-                    taskDefinition=task_definition,
-                    desiredCount=desired_count,
-                    deploymentConfiguration={
-                        'maximumPercent': maximum_percent,
-                        'minimumHealthyPercent': minimum_healthy_percent
-                    },
-                    placementConstraints=[
-                        {
-                            'type': 'distinctInstance'
-                        }
-                    ],
-                    placementStrategy=placement_strategy
-                )
-            else:
-                response = self.client.create_service(
-                    cluster=cluster,
-                    serviceName=service,
-                    taskDefinition=task_definition,
-                    desiredCount=desired_count,
-                    deploymentConfiguration={
-                        'maximumPercent': maximum_percent,
-                        'minimumHealthyPercent': minimum_healthy_percent
-                    },
-                    placementConstraints=[
-                        {
-                            'type': 'distinctInstance'
-                        }
-                    ],
-                )
-        else:
-            if placement_strategy:
-                response = self.client.create_service(
-                    cluster=cluster,
-                    serviceName=service,
-                    taskDefinition=task_definition,
-                    desiredCount=desired_count,
-                    deploymentConfiguration={
-                        'maximumPercent': maximum_percent,
-                        'minimumHealthyPercent': minimum_healthy_percent
-                    },
-                    placementStrategy=placement_strategy
-                )
-            else:
-                response = self.client.create_service(
-                    cluster=cluster,
-                    serviceName=service,
-                    taskDefinition=task_definition,
-                    desiredCount=desired_count,
-                    deploymentConfiguration={
-                        'maximumPercent': maximum_percent,
-                        'minimumHealthyPercent': minimum_healthy_percent
-                    }
-                )
+            parameters.update(
+                {'placementConstraints': [{'type': 'distinctInstance'}]}
+            )
+        if placement_strategy:
+            parameters.update({'placementStrategy': placement_strategy})
+        if load_balancers:
+            parameters.update({'loadBalancers': load_balancers})
+
+        response = self.client.create_service(**parameters)
         failures = response.get('failures')
         if failures:
             raise Exception("Service '{service}' is {failures} in cluster '{cluster}'"

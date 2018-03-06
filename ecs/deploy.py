@@ -201,7 +201,8 @@ class DeployProcess(Thread):
             maximum_percent=service.task_environment.maximum_percent,
             minimum_healthy_percent=service.task_environment.minimum_healthy_percent,
             distinct_instance=service.task_environment.distinct_instance,
-            placement_strategy=service.placement_strategy
+            placement_strategy=service.placement_strategy,
+            load_balancers=service.load_balancers
         )
         service.update(res_service)
 
