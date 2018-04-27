@@ -316,13 +316,14 @@ def get_scheduled_task_list(services_config,
         # set parameters to docker environment
         for container_definitions in task_definition.get("containerDefinitions"):
             task_environment = container_definitions.get("environment")
+            container_env = copy.copy(env)
             if task_environment is not None:
                 if not isinstance(task_environment, list):
                     raise Exception(
                         "Scheduled Task '{task_name}' taskDefinitionTemplate environment value must be list. "
                         .format(task_name=task_name))
-                env.extend(task_environment)
-            container_definitions["environment"] = env
+                container_env.extend(task_environment)
+            container_definitions["environment"] = container_env
 
         # disabledになったらリストから外す
         disabled = task_config.get("disabled")
