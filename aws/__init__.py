@@ -204,85 +204,30 @@ class AwsUtils(object):
     def deregister_task_definition(self, task_definition):
         return self.client.deregister_task_definition(taskDefinition=task_definition)
 
-    def downscale_service(self, cluster, service, maximum_percent, minimum_healthy_percent, delta=1):
-        """
-        Downscale a service
-        :param maximum_percent:
-        :param minimum_healthy_percent:
-        :return:
-        :param cluster: the cluster name
-        :param service: the service name
-        :param delta: Number of tasks to shutdown relatively to the running tasks (1 by default)
-        :return: the response or raise an Exception
-        """
-        response = self.describe_service(cluster=cluster, service=service)
-        running_count = (response.get('services')[0]).get('runningCount')
-        task_definition = (response.get('services')[0]).get('taskDefinition')
-        desired_count = running_count - delta
-        return self.update_service(
-            cluster=cluster,
-            service=service,
-            task_definition=task_definition,
-            desired_count=desired_count,
-            maximum_percent=maximum_percent,
-            minimum_healthy_percent=minimum_healthy_percent
-        )
-
-    def upscale_service(self, cluster, service, maximum_percent, minimum_healthy_percent, delta=1):
-        """
-        Upscale a service
-        :param minimum_healthy_percent: 
-        :param maximum_percent: 
-        :param cluster: the cluster name
-        :param service: the service name
-        :param delta: Number of tasks to start relatively to the running tasks (1 by default)
-        :return: the response or raise an Exception
-        """
-        response = self.describe_service(cluster=cluster, service=service)
-        running_count = (response.get('services')[0]).get('runningCount')
-        task_definition = (response.get('services')[0]).get('taskDefinition')
-        desired_count = running_count + delta
-        return self.update_service(
-            cluster=cluster,
-            service=service,
-            task_definition=task_definition,
-            desired_count=desired_count,
-            maximum_percent=maximum_percent,
-            minimum_healthy_percent=minimum_healthy_percent
-        )
-
-    def update_service_desired_count(self, cluster, service, desired_count):
-        self.client.update_service(
-            cluster=cluster,
-            service=service,
-            desiredCount=desired_count
-        )
-        return self.describe_service(cluster=cluster, service=service)
-
     def update_service(
-            self, cluster, service, task_definition, maximum_percent, minimum_healthy_percent, desired_count=None
+            self, cluster, service, task_definition=None,
+            maximum_percent=None, minimum_healthy_percent=None, desired_count=None, force_new_deployment=True
     ):
-        if desired_count is None:
-            self.client.update_service(
-                cluster=cluster,
-                service=service,
-                taskDefinition=task_definition,
-                deploymentConfiguration={
-                    'maximumPercent': maximum_percent,
-                    'minimumHealthyPercent': minimum_healthy_percent
+        parameters = {
+            'cluster': cluster,
+            'service': service
+        }
+        if force_new_deployment:
+            parameters.update({'forceNewDeployment': True})
+        if desired_count is not None:
+            parameters.update({'desiredCount': desired_count})
+        if task_definition is not None:
+            parameters.update({'taskDefinition': task_definition})
+        if maximum_percent is not None and minimum_healthy_percent is not None:
+            parameters.update(
+                {
+                    'deploymentConfiguration': {
+                        'maximumPercent': maximum_percent,
+                        'minimumHealthyPercent': minimum_healthy_percent
+                    }
                 }
             )
-        else:
-            self.client.update_service(
-                cluster=cluster,
-                service=service,
-                taskDefinition=task_definition,
-                deploymentConfiguration={
-                    'maximumPercent': maximum_percent,
-                    'minimumHealthyPercent': minimum_healthy_percent
-                },
-                desiredCount=desired_count
-            )
+        self.client.update_service(**parameters)
 
         return self.describe_service(cluster=cluster, service=service)
 
