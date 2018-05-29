@@ -86,10 +86,11 @@ class DeployProcess(Thread):
             self.stop_before_deploy(deploy)
 
     def stop_before_deploy(self, service: ecs.service.Service):
-        res_service = self.awsutils.update_service_desired_count(
+        res_service = self.awsutils.update_service(
             cluster=service.task_environment.cluster_name,
             service=service.service_name,
-            desired_count=0
+            desired_count=0,
+            force_new_deployment=False
         )
         service.update(res_service)
         success("Stop Service '{service.service_name}' succeeded.\n\033[39m"
@@ -127,14 +128,24 @@ class DeployProcess(Thread):
             scheduled_task.task_definition_arn = res_reg['taskDefinitionArn']
         self.awsutils.create_scheduled_task(
             scheduled_task=scheduled_task, description=scheduled_task_managed_description)
-        success("Deploy Scheduled Task '{scheduled_task.name}' succeeded.\n\033[39m"
-                "    - Cloudwatch Event State: {state.value}\n"
-                "    - Registering task definition arn: '{task_definition_arn}'.\n"
-                "    - schedule '{scheduled_task.schedule_expression}'.\n"
-                "    - {scheduled_task.task_environment.task_count} task count."
-                .format(state=scheduled_task.state,
-                        scheduled_task=scheduled_task,
-                        task_definition_arn=scheduled_task.task_definition_arn))
+
+        message = """Deploy Scheduled Task '{scheduled_task.name}' succeeded.\033[39m
+   - Cloudwatch Event State: {scheduled_task.state.value}"""\
+            .format(scheduled_task=scheduled_task)
+
+        if scheduled_task.is_same_task_definition:
+            message += """
+   - task definition is same. Did not register."""
+        else:
+            message += """
+   - Registering task definition arn: '{task_definition_arn}'"""\
+                .format(task_definition_arn=scheduled_task.task_definition_arn)
+        message += """
+   - schedule '{scheduled_task.schedule_expression}'.
+   - {scheduled_task.task_environment.task_count} task count."""\
+            .format(scheduled_task=scheduled_task)
+
+        success(message)
 
     def process_service(self, service: ecs.service.Service):
         self.__register_task_definition(service)
@@ -142,10 +153,18 @@ class DeployProcess(Thread):
             self.__update_service(service)
         else:
             self.__create_service(service)
-        success("Deploy Service '{service.service_name}' succeeded.\n\033[39m"
-                "    - Registering task definition arn: '{service.task_definition_arn}'\n"
-                "    - {service.task_environment.desired_count:d} task desired"
-                .format(service=service))
+        message = """Deploy Service '{service.service_name}' succeeded.\033[39m""".format(service=service)
+        if service.is_same_task_definition:
+            message += """
+   - task definition is same. Did not register."""
+        else:
+            message += """
+   - Registering task definition arn: '{task_definition_arn}'"""\
+                .format(task_definition_arn=service.task_definition_arn)
+        message += """
+   - {service.task_environment.desired_count:d} task desired""".format(service=service)
+
+        success(message)
 
     def fetch_service(self, describe_service: ecs.service.DescribeService):
         task_definition = self.__describe_task_definition(name=describe_service.task_definition_arn)
@@ -241,6 +260,9 @@ class DeployProcess(Thread):
         return task_definition
 
     def __register_task_definition(self, service: ecs.service.Service):
+        # if same task definition, then do not register.
+        if service.is_same_task_definition:
+            return
         # for register task rate limit
         retry_count = 0
         while True:
@@ -581,6 +603,8 @@ def deregister_task_definition(awsutils, service: ecs.service.Service):
     retry_count = 0
     if service.origin_task_definition_arn is None:
         return
+    if service.is_same_task_definition:
+        return 
     while True:
         try:
             awsutils.deregister_task_definition(service.origin_task_definition_arn)
