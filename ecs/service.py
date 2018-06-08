@@ -394,11 +394,12 @@ def get_service_list_yaml(
         # set parameters to docker environment
         for container_definitions in task_definition.get("containerDefinitions"):
             task_environment = container_definitions.get("environment")
+            container_env = copy.copy(env)
             if task_environment is not None:
                 if not isinstance(task_environment, list):
                     raise Exception("'%s' taskDefinitionTemplate environment value must be list. " % service_name)
-                env.extend(task_environment)
-            container_definitions["environment"] = env
+                container_env.extend(task_environment)
+            container_definitions["environment"] = container_env
 
         # disabledになったらリストから外す
         disabled = service_config.get("disabled")
