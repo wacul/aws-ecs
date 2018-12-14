@@ -282,16 +282,16 @@ this script use environment variables below:
 ## Docker
 * template test
 ```
-docker run -it --rm -e "AWS_PROFILE=profile" -v $HOME/.aws/:/root/.aws/ -v $(pwd)/infra/:/infra quay.io/wacul/aws-ecs test-templates --environment-yaml-dir /infra/conf/ --services-yaml infra/services.yml
+docker run -it --rm -e "AWS_PROFILE=profile" -v $HOME/.aws/:/root/.aws/ -v $(pwd)/infra/:/infra wacul/aws-ecs test-templates --environment-yaml-dir /infra/conf/ --services-yaml /infra/services.yml
 ```
 
 * dry-run
 ```
-docker run -it --rm -e "AWS_PROFILE=profile" -v $HOME/.aws/:/root/.aws/ -v $(pwd)/infra/:/infra quay.io/wacul/aws-ecs service --environment-yaml /infra/conf/dev.yml --service-yaml /infra/services.yml --template-group web-repo --dry-run
+docker run -it --rm -e "AWS_PROFILE=profile" -v $HOME/.aws/:/root/.aws/ -v $(pwd)/infra/:/infra wacul/aws-ecs service --environment-yaml /infra/conf/dev.yml --service-yaml /infra/services.yml --template-group web-repo --dry-run
 ```
 
 * delete
 
 ```
-docker run -it --rm -e "AWS_PROFILE=profile" -v $HOME/.aws/:/root/.aws/ -v $(pwd)/infra/:/infra quay.io/wacul/aws-ecs delete --environment dev
+docker run -it --rm -e "AWS_PROFILE=profile" -v $HOME/.aws/:/root/.aws/ -v $(pwd)/infra/:/infra wacul/aws-ecs delete --environment dev
 ```
