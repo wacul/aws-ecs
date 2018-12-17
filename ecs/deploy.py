@@ -664,13 +664,13 @@ def test_templates(args):
                 ecs.service.get_service_list_yaml(
                     services_config=services_config,
                     environment_config=environment_config,
-                    task_definition_config_env=args.task_definition_config_env,
+                    is_task_definition_config_env=args.task_definition_config_env,
                     environment=environment
                 )
                 get_scheduled_task_list(
                     services_config=services_config,
                     environment_config=environment_config,
-                    task_definition_config_env=args.task_definition_config_env,
+                    is_task_definition_config_env=args.task_definition_config_env,
                     environment=environment
                 )
         success("Template check environment `{environment}` done.".format(environment=environment))
@@ -700,14 +700,14 @@ def get_deploy_list(
         service_list = ecs.service.get_service_list_yaml(
             services_config=services_config,
             environment_config=environment_config,
-            task_definition_config_env=task_definition_config_env,
+            is_task_definition_config_env=task_definition_config_env,
             environment=environment
         )
 
         scheduled_task_list = get_scheduled_task_list(
             services_config=services_config,
             environment_config=environment_config,
-            task_definition_config_env=task_definition_config_env,
+            is_task_definition_config_env=task_definition_config_env,
             environment=environment
         )
         deploy_scheduled_task_list = get_deploy_scheduled_task_list(

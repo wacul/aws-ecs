@@ -1,5 +1,7 @@
 # coding: utf-8
 import logging
+import yaml
+import render
 
 logger = logging.getLogger(__name__)
 
@@ -60,3 +62,33 @@ def compare_container_definitions(a: dict, b: dict) -> bool:
         elif not v == b.get(k):
             return False
     return True
+
+
+def get_variables(deploy_name: str, name: str, base_service_config: dict, environment_config: dict, is_task_definition_config_env: bool):
+    variables = {"item": name}
+    service_config = {}
+    # ベースの値を取得
+    variables.update(base_service_config)
+    service_config.update(base_service_config)
+    # ベースのvars
+    base_vars = base_service_config.get("vars")
+    if base_vars:
+        variables.update(base_vars)
+    # 各環境の設定値を取得
+    variables.update(environment_config)
+    # 各環境の設定を取得
+    environment_config_services = environment_config.get(deploy_name)
+    if environment_config_services:
+        environment_service = environment_config_services.get(name)
+        if environment_service:
+            variables.update(environment_service)
+            service_config.update(environment_service)
+            environment_vars = environment_service.get("vars")
+            if environment_vars:
+                variables.update(environment_vars)
+    # varsをrenderする
+    vars_renderd = render.render_template(yaml.dump(variables), variables, is_task_definition_config_env)
+    variables.update(yaml.load(vars_renderd))
+    return service_config, variables
+
+    
