@@ -11,7 +11,7 @@ from datadiff import diff
 import render
 from ecs.classes import DeployTargetType, Deploy, EnvironmentValueNotFoundException, ParameterInvalidException, \
     ParameterNotFoundException
-from ecs.utils import is_same_container_definition, adjust_container_definition
+from ecs.utils import is_same_container_definition, adjust_container_definition, get_variables
 
 logger = logging.getLogger(__name__)
 
@@ -194,10 +194,10 @@ def get_service_list_json(
 
 
 def get_service_list_yaml(
-        services_config,
-        environment_config,
-        task_definition_config_env,
-        environment
+        services_config: dict,
+        environment_config: dict,
+        is_task_definition_config_env: bool,
+        environment: str
 ) -> list:
     try:
         services = services_config["services"]
@@ -213,10 +213,12 @@ def get_service_list_yaml(
             raise Exception("'%s' is duplicate service." % service_name)
         service_name_list.append(service_name)
         # 設定値と変数を取得
-        service_config, variables = __get_service_variables(
-            service_name=service_name,
+        service_config, variables = get_variables(
+            deploy_name = 'services',
+            name=service_name,
             base_service_config=services.get(service_name),
-            environment_config=environment_config
+            environment_config=environment_config,
+            is_task_definition_config_env=is_task_definition_config_env
         )
 
         # parameter check & build docker environment
@@ -224,7 +226,7 @@ def get_service_list_yaml(
 
         registrator = service_config.get("registrator")
         if registrator is not None:
-            registrator = render.render_template(str(registrator), variables, task_definition_config_env)
+            registrator = render.render_template(str(registrator), variables, is_task_definition_config_env)
             try:
                 registrator = bool(strtobool(registrator))
             except ValueError:
@@ -239,25 +241,25 @@ def get_service_list_yaml(
         if cluster is None:
             raise ParameterNotFoundException("Service `{service_name}` requires parameter `cluster`"
                                              .format(service_name=service_name))
-        cluster = render.render_template(str(cluster), variables, task_definition_config_env)
+        cluster = render.render_template(str(cluster), variables, is_task_definition_config_env)
         env.append({"name": "CLUSTER_NAME", "value": cluster})
 
         service_group = service_config.get("serviceGroup")
         if service_group is not None:
-            service_group = render.render_template(str(service_group), variables, task_definition_config_env)
+            service_group = render.render_template(str(service_group), variables, is_task_definition_config_env)
             env.append({"name": "SERVICE_GROUP", "value": service_group})
 
         service_template_group = service_config.get("templateGroup")
         if service_template_group is not None:
             service_template_group = render.render_template(
-                str(service_template_group), variables, task_definition_config_env)
+                str(service_template_group), variables, is_task_definition_config_env)
             env.append({"name": "TEMPLATE_GROUP", "value": service_template_group})
 
         desired_count = service_config.get("desiredCount")
         if desired_count is None:
             raise ParameterNotFoundException("Service `{service_name}` requires parameter `desiredCount`"
                                              .format(service_name=service_name))
-        desired_count = render.render_template(str(desired_count), variables, task_definition_config_env)
+        desired_count = render.render_template(str(desired_count), variables, is_task_definition_config_env)
         try:
             int(desired_count)
         except ValueError:
@@ -269,7 +271,7 @@ def get_service_list_yaml(
         if minimum_healthy_percent is not None:
             minimum_healthy_percent = render.render_template(str(minimum_healthy_percent),
                                                              variables,
-                                                             task_definition_config_env)
+                                                             is_task_definition_config_env)
             try:
                 int(minimum_healthy_percent)
             except ValueError:
@@ -279,7 +281,7 @@ def get_service_list_yaml(
 
         maximum_percent = service_config.get("maximumPercent")
         if maximum_percent is not None:
-            maximum_percent = render.render_template(str(maximum_percent), variables, task_definition_config_env)
+            maximum_percent = render.render_template(str(maximum_percent), variables, is_task_definition_config_env)
             try:
                 int(maximum_percent)
             except ValueError:
@@ -290,7 +292,7 @@ def get_service_list_yaml(
 
         distinct_instance = service_config.get("distinctInstance")
         if distinct_instance is not None:
-            distinct_instance = render.render_template(str(distinct_instance), variables, task_definition_config_env)
+            distinct_instance = render.render_template(str(distinct_instance), variables, is_task_definition_config_env)
             try:
                 distinct_instance = bool(strtobool(distinct_instance))
             except ValueError:
@@ -304,14 +306,14 @@ def get_service_list_yaml(
         if placement_strategy is not None:
             placement_strategy_list = []
             for strategy in placement_strategy:
-                strategy = render.render_template(json.dumps(strategy), variables, task_definition_config_env)
+                strategy = render.render_template(json.dumps(strategy), variables, is_task_definition_config_env)
                 strategy = json.loads(strategy)
                 placement_strategy_list.append(strategy)
             env.append({"name": "PLACEMENT_STRATEGY", "value": str(placement_strategy)})
 
         primary_placement = service_config.get("primaryPlacement")
         if primary_placement is not None:
-            primary_placement = render.render_template(str(primary_placement), variables, task_definition_config_env)
+            primary_placement = render.render_template(str(primary_placement), variables, is_task_definition_config_env)
             try:
                 primary_placement = bool(strtobool(primary_placement))
             except ValueError:
@@ -333,7 +335,7 @@ def get_service_list_yaml(
         try:
             task_definition_data = render.render_template(service_task_definition_template,
                                                           variables,
-                                                          task_definition_config_env)
+                                                          is_task_definition_config_env)
         except jinja2.exceptions.UndefinedError:
             logger.error("Service `%s` jinja2 varibles Undefined Error." % service_name)
             raise
@@ -361,25 +363,25 @@ def get_service_list_yaml(
                                                     .format(service_name=service_name))
                 if target_group_arn is not None:
                     target_group_arn = render.render_template(str(target_group_arn), variables,
-                                                              task_definition_config_env)
+                                                              is_task_definition_config_env)
                     d.update({"targetGroupArn": target_group_arn})
                 if load_balancer_name is not None:
                     load_balancer_name = render.render_template(str(load_balancer_name), variables,
-                                                                task_definition_config_env)
+                                                                is_task_definition_config_env)
                     d.update({"loadBalancerName": load_balancer_name})
                 container_name = balancer.get('containerName')
                 if container_name is None:
                     raise ParameterInvalidException("Service `{service_name}` parameter `loadBalancers`"
                                                     " required `containerName`"
                                                     .format(service_name=service_name))
-                container_name = render.render_template(str(container_name), variables, task_definition_config_env)
+                container_name = render.render_template(str(container_name), variables, is_task_definition_config_env)
                 d.update({"containerName": container_name})
                 container_port = balancer.get('containerPort')
                 if container_port is None:
                     raise ParameterInvalidException("Service `{service_name}` parameter `loadBalancers`"
                                                     " required `containerPort`"
                                                     .format(service_name=service_name))
-                container_port = render.render_template(str(container_port), variables, task_definition_config_env)
+                container_port = render.render_template(str(container_port), variables, is_task_definition_config_env)
                 try:
                     container_port = int(container_port)
                 except ValueError:
@@ -404,7 +406,7 @@ def get_service_list_yaml(
         # disabledになったらリストから外す
         disabled = service_config.get("disabled")
         if disabled is not None:
-            disabled = render.render_template(str(disabled), variables, task_definition_config_env)
+            disabled = render.render_template(str(disabled), variables, is_task_definition_config_env)
             try:
                 disabled = bool(strtobool(disabled))
             except ValueError:
@@ -416,7 +418,7 @@ def get_service_list_yaml(
         # stop before deploy
         stop_before_deploy = service_config.get("stopBeforeDeploy")
         if stop_before_deploy is not None:
-            stop_before_deploy = render.render_template(str(stop_before_deploy), variables, task_definition_config_env)
+            stop_before_deploy = render.render_template(str(stop_before_deploy), variables, is_task_definition_config_env)
             try:
                 stop_before_deploy = bool(strtobool(stop_before_deploy))
             except ValueError:
