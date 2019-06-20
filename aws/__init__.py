@@ -2,6 +2,7 @@
 from boto3 import Session
 from ecs.scheduled_tasks import ScheduledTask
 from botocore.exceptions import ClientError
+from time import sleep
 
 
 class ServiceNotFoundException(Exception):
@@ -227,8 +228,19 @@ class AwsUtils(object):
                     }
                 }
             )
-        self.client.update_service(**parameters)
-
+        retry = 0
+        While True:
+            try:
+                self.client.update_service(**parameters)
+            except ClientError as e:
+                if e.response['Error']['Code'] == 'ThrottlingException':
+                    if retry > 5:
+                        raise e
+                    sleep(3)
+                    retry += 1
+                    continue
+                else:
+                    raise e
         return self.describe_service(cluster=cluster, service=service)
 
     def wait_for_stable(self, cluster_name: str, service_name: str, delay: int, max_attempts: int):
