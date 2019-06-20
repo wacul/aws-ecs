@@ -229,7 +229,7 @@ class AwsUtils(object):
                 }
             )
         retry = 0
-        While True:
+        while True:
             try:
                 self.client.update_service(**parameters)
             except ClientError as e:
