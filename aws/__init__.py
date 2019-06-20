@@ -232,6 +232,7 @@ class AwsUtils(object):
         while True:
             try:
                 self.client.update_service(**parameters)
+                break
             except ClientError as e:
                 if e.response['Error']['Code'] == 'ThrottlingException':
                     if retry > 5:
