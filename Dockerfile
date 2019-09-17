@@ -9,4 +9,4 @@ WORKDIR /app/
 RUN apk add --update --no-cache curl ca-certificates jq bash && \
     pip install --no-cache-dir -r /app/requirements.txt
 
-ENTRYPOINT [ "python3", "main.py" ]
+ENTRYPOINT [ "python3", "/app/main.py" ]
