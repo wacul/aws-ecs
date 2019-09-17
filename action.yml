@@ -15,7 +15,7 @@ inputs:
     description: 'jinja2 template input json data file.'
     required: true
   template-group:
-    description: 'For multiple repositories ecs cluster deployment. When delete unused service with multiple repositories deployment, service and scheduled task settings exists for each repository. Then, only matches between template-group and ecs task-definition's environment TEMPLATE_GROUP value are targeted.'
+    description: 'For multiple repositories ecs cluster deployment. When delete unused service with multiple repositories deployment, service and scheduled task settings exists for each repository. Then, only matches between template-group and ecs task-definition`s environment TEMPLATE_GROUP value are targeted.'
     required: false
 runs:
   using: 'docker'
