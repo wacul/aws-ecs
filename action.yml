@@ -19,11 +19,12 @@ inputs:
     required: false
 runs:
   using: 'docker'
-  image: 'Dockerfile'
+  image: 'docker://wacul/aws-ecs:latest'
   args:
-    - '--key ${{ inputs.key }}'
-    - '--secret ${{ inputs.secret }}'
-    - '--region ${{ inputs.region }}'
-    - '--environemnt-yaml ${{ inputs.environment-yaml }}'
-    - '--template-group ${{ inputs.template-group }}'
-    - '--dry-run'
+    - service
+    - --key ${{ inputs.key }}
+    - --secret ${{ inputs.secret }}
+    - --region ${{ inputs.region }}
+    - --environemnt-yaml ${{ inputs.environment-yaml }}
+    - --template-group ${{ inputs.template-group }}
+    - --dry-run
