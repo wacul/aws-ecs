@@ -25,6 +25,6 @@ runs:
     - --key ${{ inputs.key }}
     - --secret ${{ inputs.secret }}
     - --region ${{ inputs.region }}
-    - --environemnt-yaml ${{ inputs.environment-yaml }}
+    - --environment-yaml ${{ inputs.environment-yaml }}
     - --template-group ${{ inputs.template-group }}
     - --dry-run
