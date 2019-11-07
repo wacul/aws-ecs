@@ -11,8 +11,14 @@ inputs:
     description: 'Region name (default: us-east-1)'
     required: false
     default: us-east-1
+  services-yaml:
+    description: 'ecs service and task-definition settings file.'
+    required: true
   environment-yaml:
     description: 'jinja2 template input json data file.'
+    required: true
+  deploy-service-group:
+    description: 'Only matches between `deploy-service-group` and ecs task-defintion `service-group` value on `service-yml` are deployed. If do not set `deploy-service-group` value, all service and scheduled task is deployed'
     required: true
   template-group:
     description: 'For multiple repositories ecs cluster deployment. When delete unused service with multiple repositories deployment, service and scheduled task settings exists for each repository. Then, only matches between template-group and ecs task-definition`s environment TEMPLATE_GROUP value are targeted.'
@@ -25,6 +31,7 @@ runs:
     - --key ${{ inputs.key }}
     - --secret ${{ inputs.secret }}
     - --region ${{ inputs.region }}
+    - --services-yaml ${{ inputs.services-yaml }}
     - --environment-yaml ${{ inputs.environment-yaml }}
+    - --deploy-service-group ${{ inputs.deploy-service-group }}
     - --template-group ${{ inputs.template-group }}
-    - --dry-run

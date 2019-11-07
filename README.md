@@ -279,6 +279,22 @@ this script use environment variables below:
 ]
 ```
 
+## Github Actions
+
+```
+    - name: aws ecs deploy
+      uses: wacul/aws-ecs@master
+      with:
+        key: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        secret: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        region: us-east-1
+        services-yaml: services.yaml
+        environment-yaml: conf/env.yaml
+        deploy-service-group: group
+        template-group: template
+```
+
+
 ## Docker
 * template test
 ```
