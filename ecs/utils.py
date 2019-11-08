@@ -1,6 +1,7 @@
 # coding: utf-8
 import logging
 import yaml
+import yamlordereddictloader
 import render
 
 logger = logging.getLogger(__name__)
