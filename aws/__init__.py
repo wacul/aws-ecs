@@ -197,7 +197,7 @@ class AwsUtils(object):
                 family=family, containerDefinitions=container_definitions, volumes=volumes
             )
         task_definition = response.get('taskDefinition')
-        if task_definition.get('status') is 'INACTIVE':
+        if task_definition.get('status') == 'INACTIVE':
             arn = task_definition.get('taskDefinitionArn')
             raise Exception('Task definition (%s) is inactive' % arn)
         return task_definition
