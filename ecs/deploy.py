@@ -10,6 +10,7 @@ from random import randint
 from threading import Thread
 from botocore.exceptions import ClientError, WaiterError
 import yaml
+import yamlordereddictloader
 
 import render
 from aws import AwsUtils, ServiceNotFoundException, CloudwatchEventRuleNotFoundException
