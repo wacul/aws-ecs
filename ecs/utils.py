@@ -88,7 +88,7 @@ def get_variables(deploy_name: str, name: str, base_service_config: dict, enviro
                 variables.update(environment_vars)
     # varsをrenderする
     vars_renderd = render.render_template(yaml.dump(variables), variables, is_task_definition_config_env)
-    variables.update(yaml.load(vars_renderd))
+    variables.update(yaml.load(vars_renderd, Loader=yamlordereddictloader.Loader))
     return service_config, variables
 
     
