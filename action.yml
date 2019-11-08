@@ -28,10 +28,17 @@ runs:
   image: 'docker://wacul/aws-ecs:latest'
   args:
     - service
-    - --key ${{ inputs.key }}
-    - --secret ${{ inputs.secret }}
-    - --region ${{ inputs.region }}
-    - --services-yaml ${{ inputs.services-yaml }}
-    - --environment-yaml ${{ inputs.environment-yaml }}
-    - --deploy-service-group ${{ inputs.deploy-service-group }}
-    - --template-group ${{ inputs.template-group }}
+    - --key
+    - ${{ inputs.key }}
+    - --secret
+    - ${{ inputs.secret }}
+    - --region
+    - ${{ inputs.region }}
+    - --services-yaml
+    - ${{ inputs.services-yaml }}
+    - --environment-yaml
+    - ${{ inputs.environment-yaml }}
+    - --deploy-service-group
+    - ${{ inputs.deploy-service-group }}
+    - --template-group
+    - ${{ inputs.template-group }}
