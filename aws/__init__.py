@@ -124,7 +124,7 @@ class AwsUtils(object):
         return services
 
     def create_service(self, cluster, service, task_definition, desired_count,
-                       maximum_percent, minimum_healthy_percent, distinct_instance, placement_strategy, load_balancers):
+                       maximum_percent, minimum_healthy_percent, distinct_instance, placement_strategy, placement_constraints, load_balancers):
         """
         Create service
         :param cluster: the cluster name
@@ -135,6 +135,7 @@ class AwsUtils(object):
         :param minimum_healthy_percent: minimumHealthyPercent
         :param distinct_instance: placementConstraints distictInstance
         :param placement_strategy: placementStrategy
+        :param placement_constraints: placementConstraints
         :param load_balancers: list LoadBalancers
         :return: the response or raise an Exception
         """
@@ -152,6 +153,11 @@ class AwsUtils(object):
             parameters.update(
                 {'placementConstraints': [{'type': 'distinctInstance'}]}
             )
+        if placement_constraints:
+            if parameters.get('placementConstraints') is not None:
+                parameters['placementConstraints'].append(placement_constraints)
+            else:
+                parameters.update({'placementConstraints': placement_constraints})
         if placement_strategy:
             parameters.update({'placementStrategy': placement_strategy})
         if load_balancers:

@@ -61,6 +61,7 @@ class TaskEnvironment(object):
         self.template_group = None
         self.task_count = None
         self.placement_strategy = None
+        self.placement_constraints = None
         for task_environment in task_environment_list:
             if task_environment['name'] == 'ENVIRONMENT':
                 self.environment = task_environment['value']
@@ -115,7 +116,7 @@ class CloudwatchEventRule(Deploy):
 
 
 class ScheduledTask(Deploy):
-    def __init__(self, task_definition, target_lambda_arn, schedule_expression, placement_strategy):
+    def __init__(self, task_definition, target_lambda_arn, schedule_expression, placement_strategy, placement_constraints):
         self.task_definition = task_definition
         self.family = task_definition.get('family')
         if self.family is None:
@@ -127,6 +128,7 @@ class ScheduledTask(Deploy):
         self.target_lambda_arn = target_lambda_arn
         self.schedule_expression = schedule_expression
         self.placement_strategy = placement_strategy
+        self.placement_constraints = placement_constraints
 
         self.status = ecs.classes.ProcessStatus.normal
 
@@ -242,6 +244,16 @@ def get_scheduled_task_list(services_config,
                 placement_strategy_list.append(strategy)
             env.append({"name": "PLACEMENT_STRATEGY", "value": str(placement_strategy)})
 
+        placement_constraints = service_config.get("placementConstraints")
+        placement_constraints_list = None
+        if placement_constraints is not None:
+            placement_constraints_list = []
+            for constrant in placement_constraints:
+                constrant = render.render_template(json.dumps(constrant), variables, is_task_definition_config_env)
+                constrant = json.loads(constrant)
+                placement_constraints_list.append(constrant)
+            env.append({"name": "PLACEMENT_CONSTRAINTS", "value": str(placement_constraints)})
+
         cloudwatch_event = task_config.get('cloudwatchEvent')
         if cloudwatch_event is None:
             raise ParameterNotFoundException("Scheduled Task `{task_name}` requires parameter `cloudwatchEvent`"
@@ -318,7 +330,8 @@ def get_scheduled_task_list(services_config,
             task_definition=task_definition,
             target_lambda_arn=target_lambda_arn,
             schedule_expression=schedule_expression,
-            placement_strategy=placement_strategy
+            placement_strategy=placement_strategy,
+            placement_constraints=placement_constraints
         )
         scheduled_task_list.append(scheduled_task)
 

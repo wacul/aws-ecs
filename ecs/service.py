@@ -92,7 +92,7 @@ class DescribeService(Deploy):
 
 class Service(Deploy):
     def __init__(self, task_definition: dict, stop_before_deploy: bool, primary_placement: bool,
-                 placement_strategy: list = None, load_balancers: list = None):
+                 placement_strategy: list = None, placement_constraints: list = None, load_balancers: list = None):
         self.task_definition = task_definition
         self.task_environment = TaskEnvironment(task_definition)
         self.family = task_definition['family']
@@ -100,6 +100,7 @@ class Service(Deploy):
         self.desired_count = self.task_environment.desired_count
         self.stop_before_deploy = stop_before_deploy
         self.placement_strategy = placement_strategy
+        self.placement_constraints = placement_constraints
         self.is_primary_placement = primary_placement
         self.load_balancers = load_balancers
 
@@ -311,6 +312,16 @@ def get_service_list_yaml(
                 placement_strategy_list.append(strategy)
             env.append({"name": "PLACEMENT_STRATEGY", "value": str(placement_strategy)})
 
+        placement_constraints = service_config.get("placementConstraints")
+        placement_constraints_list = None
+        if placement_constraints is not None:
+            placement_constraints_list = []
+            for constrant in placement_constraints:
+                constrant = render.render_template(json.dumps(constrant), variables, is_task_definition_config_env)
+                constrant = json.loads(constrant)
+                placement_constraints_list.append(constrant)
+            env.append({"name": "PLACEMENT_CONSTRAINTS", "value": str(placement_constraints)})
+
         primary_placement = service_config.get("primaryPlacement")
         if primary_placement is not None:
             primary_placement = render.render_template(str(primary_placement), variables, is_task_definition_config_env)
@@ -433,6 +444,7 @@ def get_service_list_yaml(
                 stop_before_deploy=stop_before_deploy,
                 primary_placement=primary_placement,
                 placement_strategy=placement_strategy_list,
+                placement_constraints=placement_constraints_list,
                 load_balancers=rendered_balancers
             )
         )
