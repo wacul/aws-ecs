@@ -222,6 +222,7 @@ class DeployProcess(Thread):
             minimum_healthy_percent=service.task_environment.minimum_healthy_percent,
             distinct_instance=service.task_environment.distinct_instance,
             placement_strategy=service.placement_strategy,
+            placement_constraints=service.placement_constraints,
             load_balancers=service.load_balancers
         )
         service.update(res_service)
