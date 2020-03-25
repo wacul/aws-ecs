@@ -95,6 +95,7 @@ services:
 * `disabled` (optional): if parameter is true, scheduled task is disabled. (default: False)
 * `stopBeforeDeploy` (optional): if this parameter is true, stop service before ecs service update. (default: False)
 * `placementStrategy` (optional): ecs service run strategy. then set ecs service environment `PLACEMENT_STRATEGY` value.
+* `placementConstraints` (optional): ecs service run placement contrants. then set ecs service environment `PLACEMENT_CONSTRAINTS` value.
 * `primaryPlacement` (optional): if this parameter is true, ecs service start up first.
 * `loadBlancers` (optional): elb settings. list.
   * `loadBalancerName`: elb name.
@@ -113,6 +114,7 @@ services:
   * `scheduleExpression` (required): cloudwatch event schedule expression.
   * `targetLambdaArn` (required): cloudwatch event target lambda arn. 
 * `placementStrategy` (optional): ecs task run strategy. then set ecs service environment `PLACEMENT_STRATEGY` value.
+* `placementConstraints` (optional): ecs task run placement contrants. then set ecs service environment `PLACEMENT_CONSTRAINTS` value.
 * `taskDefinitionTemplate` (required): Specify ecs task-definition template name from `taskDefinitionTemplates`. scheduled task name is set to `{{item}}`.
 * `taskCount` (required): ecs task run count. then set ecs service's environment `TASK_COUNT`.
 * `disabled` (optional): if parameter is true, service is disabled. (default: False)
