@@ -155,7 +155,7 @@ class AwsUtils(object):
             )
         if placement_constraints:
             if parameters.get('placementConstraints') is not None:
-                parameters['placementConstraints'].append(placement_constraints)
+                parameters['placementConstraints'].extend(placement_constraints)
             else:
                 parameters.update({'placementConstraints': placement_constraints})
         if placement_strategy:
