@@ -30,7 +30,7 @@ def init():
     service_parser.add_argument('--task-definition-config-env', default=True, action='store_true')
     service_parser.add_argument('--no-task-definition-config-env', dest='task_definition_config_env', default=True,
                                 action='store_false')
-    service_parser.add_argument('--threads-count', type=int, default=3)
+    service_parser.add_argument('--threads-count', type=int, default=10)
     service_parser.add_argument('--service-wait-max-attempts', type=int, default=72)
     service_parser.add_argument('--service-wait-delay', type=int, default=10)
     service_parser.add_argument('--service-zero-keep', dest='service_zero_keep', default=True, action='store_true')
