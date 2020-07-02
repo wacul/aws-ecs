@@ -69,10 +69,10 @@ fi
 
 
 if [ "$AWS_ECS_TEST_TEMPLATES" == 'true' ]; then
-    python3 main.py test-templates \
+    python3 /app/main.py test-templates \
         $TASK_DEFINITION
 else
-    python3 main.py service \
+    python3 /app/main.py service \
         --key "$AWS_ECS_KEY" \
         --secret "$AWS_ECS_SECRET" \
         --region "${AWS_ECS_REGION:-us-east-1}" \
