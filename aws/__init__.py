@@ -138,7 +138,7 @@ class AwsUtils(object):
         :param placement_strategy: placementStrategy
         :param placement_constraints: placementConstraints
         :param load_balancers: list LoadBalancers
-        :param network_configuration: list networkConfiguration
+        :param network_configuration: dict networkConfiguration
         :return: the response or raise an Exception
         """
         parameters = {

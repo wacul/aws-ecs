@@ -92,7 +92,7 @@ class DescribeService(Deploy):
 
 class Service(Deploy):
     def __init__(self, task_definition: dict, stop_before_deploy: bool, primary_placement: bool,
-                 placement_strategy: list = None, placement_constraints: list = None, load_balancers: list = None, network_configuration: list = None):
+                 placement_strategy: list = None, placement_constraints: list = None, load_balancers: list = None, network_configuration: dict = None):
         self.task_definition = task_definition
         self.task_environment = TaskEnvironment(task_definition)
         self.family = task_definition['family']
