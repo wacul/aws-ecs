@@ -102,6 +102,7 @@ services:
   * `targetGroupArn`: elb target group arn.
   * `containerName`: container name to associate with the elb.
   * `containerPort`: port number to associaate with elb.
+* `networkConfiguration` (optional): network configuration awsvpc. 
 * `vars` (optional): jinja2 template variable settings.
 
 

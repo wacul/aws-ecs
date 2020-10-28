@@ -124,7 +124,8 @@ class AwsUtils(object):
         return services
 
     def create_service(self, cluster, service, task_definition, desired_count,
-                       maximum_percent, minimum_healthy_percent, distinct_instance, placement_strategy, placement_constraints, load_balancers):
+                       maximum_percent, minimum_healthy_percent, distinct_instance,
+                       placement_strategy, placement_constraints, load_balancers, network_configuration):
         """
         Create service
         :param cluster: the cluster name
@@ -137,6 +138,7 @@ class AwsUtils(object):
         :param placement_strategy: placementStrategy
         :param placement_constraints: placementConstraints
         :param load_balancers: list LoadBalancers
+        :param network_configuration: dict networkConfiguration
         :return: the response or raise an Exception
         """
         parameters = {
@@ -162,6 +164,8 @@ class AwsUtils(object):
             parameters.update({'placementStrategy': placement_strategy})
         if load_balancers:
             parameters.update({'loadBalancers': load_balancers})
+        if network_configuration:
+            parameters.update({'networkConfiguration': network_configuration})
 
         response = self.client.create_service(**parameters)
         failures = response.get('failures')

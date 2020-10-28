@@ -92,7 +92,7 @@ class DescribeService(Deploy):
 
 class Service(Deploy):
     def __init__(self, task_definition: dict, stop_before_deploy: bool, primary_placement: bool,
-                 placement_strategy: list = None, placement_constraints: list = None, load_balancers: list = None):
+                 placement_strategy: list = None, placement_constraints: list = None, load_balancers: list = None, network_configuration: dict = None):
         self.task_definition = task_definition
         self.task_environment = TaskEnvironment(task_definition)
         self.family = task_definition['family']
@@ -103,6 +103,7 @@ class Service(Deploy):
         self.placement_constraints = placement_constraints
         self.is_primary_placement = primary_placement
         self.load_balancers = load_balancers
+        self.network_configuration = network_configuration
 
         self.origin_task_definition_arn = None
         self.origin_task_definition = None
@@ -404,6 +405,25 @@ def get_service_list_yaml(
                 rendered_balancers.append(d)
                 env.append({"name": "LOAD_BALANCER", "value": "true"})
 
+        network_configuration = service_config.get("networkConfiguration")
+        rendered_network_configuration = None
+        if network_configuration is not None:
+            try:
+                network_configuration_data = render.render_template(json.dumps(network_configuration),
+                                                              variables,
+                                                              is_task_definition_config_env)
+            except jinja2.exceptions.UndefinedError:
+                logger.error("Service `%s` networkConfiguration jinja2 varibles Undefined Error." % service_name)
+                raise
+            try:
+                rendered_network_configuration = json.loads(network_configuration_data)
+            except json.decoder.JSONDecodeError as e:
+                raise Exception(
+                    "Service `{service}` networkConfiguration: {e.__class__.__name__} {e}\njson:\n{json}".format(service=service_name, e=e,
+                                                                                            json=network_configuration_data))
+            if (network_configuration.get('awsvpcConfiguration') is not None):
+                task_definition.update({"networkMode": "awsvpc"})
+
         # set parameters to docker environment
         for container_definitions in task_definition.get("containerDefinitions"):
             task_environment = container_definitions.get("environment")
@@ -445,7 +465,8 @@ def get_service_list_yaml(
                 primary_placement=primary_placement,
                 placement_strategy=placement_strategy_list,
                 placement_constraints=placement_constraints_list,
-                load_balancers=rendered_balancers
+                load_balancers=rendered_balancers,
+                network_configuration=rendered_network_configuration,
             )
         )
     return service_list
