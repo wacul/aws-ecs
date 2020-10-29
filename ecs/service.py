@@ -92,7 +92,8 @@ class DescribeService(Deploy):
 
 class Service(Deploy):
     def __init__(self, task_definition: dict, stop_before_deploy: bool, primary_placement: bool,
-                 placement_strategy: list = None, placement_constraints: list = None, load_balancers: list = None, network_configuration: dict = None):
+                 placement_strategy: list = None, placement_constraints: list = None, load_balancers: list = None,
+                 network_configuration: dict = None, service_registries: list = None):
         self.task_definition = task_definition
         self.task_environment = TaskEnvironment(task_definition)
         self.family = task_definition['family']
@@ -104,6 +105,7 @@ class Service(Deploy):
         self.is_primary_placement = primary_placement
         self.load_balancers = load_balancers
         self.network_configuration = network_configuration
+        self.service_registries = service_registries
 
         self.origin_task_definition_arn = None
         self.origin_task_definition = None
@@ -424,6 +426,26 @@ def get_service_list_yaml(
             if (network_configuration.get('awsvpcConfiguration') is not None):
                 task_definition.update({"networkMode": "awsvpc"})
 
+        service_registries = service_config.get("serviceRegistries")
+        rendered_service_registries = None
+        if service_registries is not None:
+            rendered_service_registries = []
+            for service_registry in service_registries:
+                try:
+                    service_registry_data = render.render_template(json.dumps(service_registry),
+                                                                   variables,
+                                                                   is_task_definition_config_env)
+                except jinja2.exceptions.UndefinedError:
+                    logger.error("Service `%s` serviceRegistry jinja2 varibles Undefined Error." % service_name)
+                    raise
+                try:
+                    rendered_service_registry = json.loads(service_registry_data)
+                except json.decoder.JSONDecodeError as e:
+                    raise Exception(
+                        "Service `{service}` networkConfiguration: {e.__class__.__name__} {e}\njson:\n{json}".format(service=service_name, e=e,
+                                                                                            json=service_registry_data))
+                rendered_service_registries.append(rendered_service_registry)
+
         # set parameters to docker environment
         for container_definitions in task_definition.get("containerDefinitions"):
             task_environment = container_definitions.get("environment")
@@ -467,6 +489,7 @@ def get_service_list_yaml(
                 placement_constraints=placement_constraints_list,
                 load_balancers=rendered_balancers,
                 network_configuration=rendered_network_configuration,
+                service_registries=rendered_service_registries,
             )
         )
     return service_list

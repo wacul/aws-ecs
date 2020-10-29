@@ -103,6 +103,7 @@ services:
   * `containerName`: container name to associate with the elb.
   * `containerPort`: port number to associaate with elb.
 * `networkConfiguration` (optional): network configuration awsvpc. 
+* `serviceRegistries` (optional): service registries. 
 * `vars` (optional): jinja2 template variable settings.
 
 
