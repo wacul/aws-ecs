@@ -225,6 +225,7 @@ class DeployProcess(Thread):
             placement_constraints=service.placement_constraints,
             load_balancers=service.load_balancers,
             network_configuration=service.network_configuration,
+            service_registries=service.service_registries,
         )
         service.update(res_service)
 
