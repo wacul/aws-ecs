@@ -44,6 +44,7 @@ def init():
                                 action='store_true')
     service_parser.add_argument('--no-delete-unused-service', dest='delete_unused_service', default=True,
                                 action='store_false')
+    service_parser.add_argument('--service-update-only', dest='service_update_only', default=False, action='store_true')
 
     test_templates_parser = subparser.add_parser("test-templates")
     test_templates_parser.add_argument('--task-definition-template-dir')

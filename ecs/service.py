@@ -109,7 +109,7 @@ class Service(Deploy):
 
         self.origin_task_definition_arn = None
         self.origin_task_definition = None
-        self.origin_desired_count = 0
+        self.origin_desired_count = None
         self.task_definition_arn = None
         self.origin_service_exists = False
         self.is_same_task_definition = False
@@ -128,9 +128,11 @@ class Service(Deploy):
     def set_task_definition_arn(self, task_definition: dict):
         self.task_definition_arn = task_definition.get('taskDefinitionArn')
 
-    def update(self, describe_service: dict):
+    def update_run_count(self, describe_service: dict, is_stop_before_deploy: bool):
         self.running_count = describe_service.get('runningCount')
         self.desired_count = describe_service.get('desiredCount')
+        if (is_stop_before_deploy and self.origin_desired_count is None):
+            self.origin_desired_count = describe_service.get('runningCount')
 
     def compare_container_definition(self):
         a = self.origin_task_definition['containerDefinitions']
