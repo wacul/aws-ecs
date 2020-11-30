@@ -6,7 +6,6 @@ import traceback
 import sys
 from multiprocessing import Queue
 from queue import Queue, Empty
-from random import randint
 from threading import Thread
 from botocore.exceptions import WaiterError
 import yaml

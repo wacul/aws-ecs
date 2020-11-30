@@ -3,6 +3,7 @@ from boto3 import Session
 from ecs.scheduled_tasks import ScheduledTask
 from botocore.exceptions import ClientError
 from time import sleep
+from random import randint
 
 
 class EcsServiceNotFoundException(Exception):
