@@ -8,12 +8,12 @@ from multiprocessing import Queue
 from queue import Queue, Empty
 from random import randint
 from threading import Thread
-from botocore.exceptions import ClientError, WaiterError
+from botocore.exceptions import WaiterError
 import yaml
 import yamlordereddictloader
 
 import render
-from aws import AwsUtils, ServiceNotFoundException, CloudwatchEventRuleNotFoundException
+from aws import AwsUtils, EcsServiceNotFoundException, CloudwatchEventRuleNotFoundException
 from ecs.classes import ProcessMode, ProcessStatus, VariableNotFoundException
 from ecs.scheduled_tasks import ScheduledTask, get_scheduled_task_list, get_deploy_scheduled_task_list, \
     CloudwatchEventRule, CloudWatchEventState, scheduled_task_managed_description
@@ -23,12 +23,13 @@ from ecs.utils import h1, h2, success, error, info
 
 class DeployProcess(Thread):
     def __init__(self, task_queue, key, secret, region, is_service_zero_keep, is_stop_before_deploy,
-                 service_wait_max_attempts, service_wait_delay):
+                 is_service_update_only, service_wait_max_attempts, service_wait_delay):
         super().__init__()
         self.task_queue = task_queue
         self.awsutils = AwsUtils(access_key=key, secret_key=secret, region=region)
         self.is_service_zero_keep = is_service_zero_keep
         self.is_stop_before_deploy = is_stop_before_deploy
+        self.is_service_update_only = is_service_update_only
         self.service_wait_max_attempts = service_wait_max_attempts
         self.service_wait_delay = service_wait_delay
 
@@ -87,13 +88,12 @@ class DeployProcess(Thread):
             self.stop_before_deploy(deploy)
 
     def stop_before_deploy(self, service: ecs.service.Service):
-        res_service = self.awsutils.update_service(
-            cluster=service.task_environment.cluster_name,
-            service=service.service_name,
+        self.__update_service(
+            service=service,
             desired_count=0,
-            force_new_deployment=False
+            force_new_deployment=False,
+            is_stop_before_deploy=True,
         )
-        service.update(res_service)
         success("Stop Service '{service.service_name}' succeeded.\n\033[39m"
                 "    - 0 task desired"
                 .format(service=service))
@@ -149,21 +149,20 @@ class DeployProcess(Thread):
         success(message)
 
     def process_service(self, service: ecs.service.Service):
-        self.__register_task_definition(service)
-        if service.origin_service_exists:
-            self.__update_service(service)
-        else:
-            self.__create_service(service)
+        if not self.is_service_update_only:
+            self.__register_task_definition(service)
+        self.__update_service(service=service, desired_count=service.task_environment.desired_count)
         message = """Deploy Service '{service.service_name}' succeeded.\033[39m""".format(service=service)
-        if service.is_same_task_definition:
-            message += """
+        if not self.is_service_update_only:
+            if service.is_same_task_definition:
+                message += """
    - task definition is same. Did not register."""
-        else:
-            message += """
+            else:
+                message += """
    - Registering task definition arn: '{task_definition_arn}'"""\
                 .format(task_definition_arn=service.task_definition_arn)
-        message += """
-   - {service.task_environment.desired_count:d} task desired""".format(service=service)
+            message += """
+    - {service.task_environment.desired_count:d} task desired""".format(service=service)
 
         success(message)
 
@@ -178,10 +177,10 @@ class DeployProcess(Thread):
                     service.task_environment.cluster_name, service.service_name
                 )
                 describe_service = ecs.service.DescribeService(service_description=res_service)
-                task_definition = self.awsutils.describe_task_definition(describe_service.task_definition_arn)
+                task_definition = self.__describe_task_definition(describe_service.task_definition_arn)
                 describe_service.set_from_task_definition(task_definition)
                 service.set_from_describe_service(describe_service=describe_service)
-            except ServiceNotFoundException:
+            except EcsServiceNotFoundException:
                 error("Service '{service.service_name}' not Found. will be created.".format(service=service))
                 return
         if not service.origin_service_exists:
@@ -198,7 +197,7 @@ class DeployProcess(Thread):
         if scheduled_task.origin_task_definition_arn is None:
             try:
                 describe_rule = self.awsutils.describe_rule(scheduled_task.name)
-                task_definition = self.awsutils.describe_task_definition(scheduled_task.name)
+                task_definition = self.__describe_task_definition(scheduled_task.name)
                 c = CloudwatchEventRule(describe_rule)
                 c.set_from_task_definition(task_definition)
                 scheduled_task.set_from_cloudwatch_event_rule(c)
@@ -212,12 +211,15 @@ class DeployProcess(Thread):
         success("Checking scheduled task '{scheduled_task.name}' succeeded. \n\033[39m{checks}"
                 .format(scheduled_task=scheduled_task, checks=checks))
 
-    def __create_service(self, service: ecs.service.Service):
+    def __create_service(self, service: ecs.service.Service, is_stop_before_deploy=False):
+        desired_count = service.task_environment.desired_count
+        if (is_stop_before_deploy):
+            desired_count = 0
         res_service = self.awsutils.create_service(
             cluster=service.task_environment.cluster_name,
             service=service.service_name,
             task_definition=service.task_definition_arn,
-            desired_count=service.task_environment.desired_count,
+            desired_count=desired_count,
             maximum_percent=service.task_environment.maximum_percent,
             minimum_healthy_percent=service.task_environment.minimum_healthy_percent,
             distinct_instance=service.task_environment.distinct_instance,
@@ -227,62 +229,39 @@ class DeployProcess(Thread):
             network_configuration=service.network_configuration,
             service_registries=service.service_registries,
         )
-        service.update(res_service)
+        service.update_run_count(describe_service=res_service, is_stop_before_deploy=False)
+        return res_service
 
-    def __update_service(self, service: ecs.service.Service):
-        desired_count = service.task_environment.desired_count
-        # サービスのタスク数が0だったらそれを維持する
+    def __update_service(
+        self, service: ecs.service.Service, desired_count=None, force_new_deployment=True, is_stop_before_deploy=False
+    ):
         if self.is_service_zero_keep and service.origin_desired_count == 0:
             desired_count = 0
-        res_service = self.awsutils.update_service(
-            cluster=service.task_environment.cluster_name,
-            service=service.service_name,
-            task_definition=service.task_definition_arn,
-            maximum_percent=service.task_environment.maximum_percent,
-            minimum_healthy_percent=service.task_environment.minimum_healthy_percent,
-            desired_count=desired_count
-        )
-        service.update(res_service)
+        try:
+            res_service = self.awsutils.update_service(
+                cluster=service.task_environment.cluster_name,
+                service=service.service_name,
+                task_definition=service.task_definition_arn,
+                maximum_percent=service.task_environment.maximum_percent,
+                minimum_healthy_percent=service.task_environment.minimum_healthy_percent,
+                desired_count=desired_count,
+                force_new_deployment=force_new_deployment,
+            )
+        except EcsServiceNotFoundException:
+            error("Service '{service.service_name}' not Found. will be created.".format(service=service))
+            self.__register_task_definition(service)
+            res_service = self.__create_service(service)
+        service.update_run_count(describe_service=res_service, is_stop_before_deploy=is_stop_before_deploy)
 
     def __describe_task_definition(self, name: str) -> dict:
-        # for describe task rate limit
-        retry_count = 0
-        while True:
-            try:
-                task_definition = self.awsutils.describe_task_definition(name=name)
-            except ClientError as e:
-                error_code = e.response['Error']['Code']
-                if error_code == 'ThrottlingException':
-                    if retry_count > 6:
-                        raise
-                    retry_count = retry_count + 1
-                    time.sleep(randint(3, 10))
-                    continue
-                else:
-                    raise
-            break
+        task_definition = self.awsutils.describe_task_definition(name=name)
         return task_definition
 
     def __register_task_definition(self, service: ecs.service.Service):
         # if same task definition, then do not register.
         if service.is_same_task_definition:
             return
-        # for register task rate limit
-        retry_count = 0
-        while True:
-            try:
-                task_definition = self.awsutils.register_task_definition(task_definition=service.task_definition)
-            except ClientError as e:
-                error_code = e.response['Error']['Code']
-                if error_code == 'ThrottlingException':
-                    if retry_count > 6:
-                        raise
-                    retry_count = retry_count + 1
-                    time.sleep(randint(3, 10))
-                    continue
-                else:
-                    raise
-            break
+        task_definition = self.awsutils.register_task_definition(task_definition=service.task_definition)
         service.set_task_definition_arn(task_definition)
 
 
@@ -328,6 +307,7 @@ class DeployManager(object):
         self.is_service_zero_keep = True
         self.is_stop_before_deploy = True
         self.is_delete_unused_service = True
+        self.is_service_update_only = False
         self.force = False
 
     def _service_config(self):
@@ -352,6 +332,7 @@ class DeployManager(object):
         self.template_group = self._args.template_group
         self.is_delete_unused_service = self._args.delete_unused_service
         self.is_stop_before_deploy = self._args.stop_before_deploy
+        self.is_service_update_only = self._args.service_update_only
 
     def _set_deploy_list(self):
         for service in self.all_deploy_target_service_list:
@@ -367,10 +348,10 @@ class DeployManager(object):
                     self.remain_deploy_service_list.append(service)
 
     def _unstopped_primary_stop_before_deploy_service_list(self) -> list:
-        return [x for x in self.primary_stop_before_deploy_service_list if x.origin_desired_count > 0]
+        return [x for x in self.primary_stop_before_deploy_service_list]
 
     def _unstopped_stop_before_deploy_service_list(self) -> list:
-        return [x for x in self.stop_before_deploy_service_list if x.origin_desired_count > 0]
+        return [x for x in self.stop_before_deploy_service_list]
 
     def _start_threads(self):
         # threadの開始
@@ -382,6 +363,7 @@ class DeployManager(object):
                 region=self.region,
                 is_service_zero_keep=self.is_service_zero_keep,
                 is_stop_before_deploy=self.is_stop_before_deploy,
+                is_service_update_only=self.is_service_update_only,
                 service_wait_max_attempts=self.service_wait_max_attempts,
                 service_wait_delay=self.service_wait_delay
             )
@@ -391,18 +373,21 @@ class DeployManager(object):
     def run(self):
         self._service_config()
         self._start_threads()
-        self._fetch_ecs_information()
+        if not self.is_service_update_only:
+            self._fetch_ecs_information()
 
-        # Step: Delete Unused Service
-        self._delete_unused()
-        self._check_deploy()
+            # Step: Delete Unused Service
+            self._delete_unused()
+            self._check_deploy()
+
         self._set_deploy_list()
 
         self._stop_scheduled_task()
         self._stop_before_deploy()
         self._deploy_service()
         self._start_after_deploy()
-        self._deploy_scheduled_task()
+        if not self.is_service_update_only:
+            self._deploy_scheduled_task()
 
         self._result_check()
 
@@ -608,21 +593,8 @@ def deregister_task_definition(awsutils, service: ecs.service.Service):
     if service.origin_task_definition_arn is None:
         return
     if service.is_same_task_definition:
-        return 
-    while True:
-        try:
-            awsutils.deregister_task_definition(service.origin_task_definition_arn)
-        except ClientError as e:
-            error_code = e.response['Error']['Code']
-            if error_code == 'ThrottlingException':
-                if retry_count > 3:
-                    break
-                retry_count = retry_count + 1
-                time.sleep(3)
-                continue
-            else:
-                raise
-        break
+        return
+    awsutils.deregister_task_definition(service.origin_task_definition_arn)
 
 
 def wait_for_stable(awsutils, service: ecs.service.Service, delay: int, max_attempts: int):
@@ -633,7 +605,7 @@ def wait_for_stable(awsutils, service: ecs.service.Service, delay: int, max_atte
             max_attempts=max_attempts,
             delay=delay
         )
-        service.update(res_service)
+        service.update_run_count(describe_service=res_service, is_stop_before_deploy=False)
         deregister_task_definition(awsutils, service)
         success(
             "service '{service.service_name}' ({service.running_count:d} / {service.desired_count}) update completed."

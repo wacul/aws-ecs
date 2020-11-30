@@ -5,7 +5,7 @@ from botocore.exceptions import ClientError
 from time import sleep
 
 
-class ServiceNotFoundException(Exception):
+class EcsServiceNotFoundException(Exception):
     pass
 
 
@@ -37,7 +37,21 @@ class AwsUtils(object):
         return response
 
     def describe_task_definition(self, name):
-        response = self.client.describe_task_definition(taskDefinition=name)
+        retry_count = 0
+        while True:
+            try:
+                response = self.client.describe_task_definition(taskDefinition=name)
+            except ClientError as e:
+                error_code = e.response['Error']['Code']
+                if error_code == 'ThrottlingException':
+                    if retry_count > 6:
+                        raise
+                    retry_count = retry_count + 1
+                    time.sleep(randint(3, 10))
+                    continue
+                else:
+                    raise
+            break
         return response.get('taskDefinition')
 
     def delete_service(self, cluster, service_name):
@@ -48,10 +62,10 @@ class AwsUtils(object):
         self.client.delete_service(cluster=cluster, service=service_name)
 
     def list_services(self, cluster):
-        response = self.client.list_services(cluster=cluster, maxResults=10)
+        response = self.client.list_services(cluster=cluster, maxResults=50)
         service_arn_list = response['serviceArns']
         while 'nextToken' in response:
-            response = self.client.list_services(cluster=cluster, maxResults=10, nextToken=response['nextToken'])
+            response = self.client.list_services(cluster=cluster, maxResults=50, nextToken=response['nextToken'])
             service_arn_list.extend(response['serviceArns'])
         return service_arn_list
 
@@ -65,7 +79,7 @@ class AwsUtils(object):
         response = self.client.describe_services(cluster=cluster, services=[service])
         failures = response.get('failures')
         if failures:
-            raise ServiceNotFoundException("Service '{service}' failure in cluster '{cluster}'.\nfailures:{failures}"
+            raise EcsServiceNotFoundException("Service '{service}' failure in cluster '{cluster}'.\nfailures:{failures}"
                                            .format(service=service, failures=failures, cluster=cluster))
         res_services = response['services']
         # 複数同名のサービスが見つかったら、ACTIVEを返しておく
@@ -89,7 +103,7 @@ class AwsUtils(object):
                 result['services'].extend(response['services'])
             if len(response['failures']) > 0:
                 result['failures'].extend(response['failures'])
-            
+
             service_list = service_list[10:]
 
             failures = response.get('failures')
@@ -99,7 +113,7 @@ class AwsUtils(object):
                 message = "describe_service failure."
                 for failure in failures:
                     message = message + "\nservice: %s, reson: %s" % (failure.get('arn'), failure.get('reason'))
-                raise ServiceNotFoundException("message")
+                raise EcsServiceNotFoundException("message")
         services = result.get('services')
 
         # 重複チェック
@@ -146,13 +160,16 @@ class AwsUtils(object):
         parameters = {
             "cluster": cluster,
             "serviceName": service,
-            "taskDefinition": task_definition,
             "desiredCount": desired_count,
             "deploymentConfiguration": {
                 "maximumPercent": maximum_percent,
                 "minimumHealthyPercent": minimum_healthy_percent
              }
         }
+        if task_definition:
+            parameters.update(
+                {"taskDefinition": task_definition}
+            )
         if distinct_instance:
             parameters.update(
                 {'placementConstraints': [{'type': 'distinctInstance'}]}
@@ -185,31 +202,36 @@ class AwsUtils(object):
         :param task_definition: the task definition
         :return: the response or raise an Exception
         """
-        family = task_definition.get('family')
-        container_definitions = task_definition.get('containerDefinitions')
-        volumes = task_definition.get('volumes', [])
+        parameters = {
+            'family': task_definition.get('family'),
+            'containerDefinitions': task_definition.get('containerDefinitions'),
+            'volumes': task_definition.get('volumes', [])
+        }
         network_mode = task_definition.get('networkMode', None)
         task_role_arn = task_definition.get('taskRoleArn', None)
-        if network_mode is not None and task_role_arn is not None:
-            response = self.client.register_task_definition(
-                family=family,
-                containerDefinitions=container_definitions,
-                volumes=volumes,
-                networkMode=network_mode,
-                taskRoleArn=task_role_arn
+        if network_mode is not None:
+            parameters.update(
+                {'networkMode': network_mode}
             )
-        elif network_mode is not None:
-            response = self.client.register_task_definition(
-                family=family, containerDefinitions=container_definitions, volumes=volumes, networkMode=network_mode
+        if task_role_arn is not None:
+            parameters.update(
+                {'taskRoleArn': task_role_arn}
             )
-        elif task_role_arn is not None:
-            response = self.client.register_task_definition(
-                family=family, containerDefinitions=container_definitions, volumes=volumes, taskRoleArn=task_role_arn
-            )
-        else:
-            response = self.client.register_task_definition(
-                family=family, containerDefinitions=container_definitions, volumes=volumes
-            )
+        retry_count = 0
+        while True:
+            try:
+                response = self.client.register_task_definition(**parameters)
+            except ClientError as e:
+                error_code = e.response['Error']['Code']
+                if error_code == 'ThrottlingException':
+                    if retry_count > 6:
+                        raise
+                    retry_count = retry_count + 1
+                    time.sleep(randint(3, 10))
+                    continue
+                else:
+                    raise
+            break
         task_definition = response.get('taskDefinition')
         if task_definition.get('status') == 'INACTIVE':
             arn = task_definition.get('taskDefinitionArn')
@@ -217,7 +239,22 @@ class AwsUtils(object):
         return task_definition
 
     def deregister_task_definition(self, task_definition):
-        return self.client.deregister_task_definition(taskDefinition=task_definition)
+        retry_count = 0
+        while True:
+            try:
+                response = self.client.deregister_task_definition(taskDefinition=task_definition)
+            except ClientError as e:
+                error_code = e.response['Error']['Code']
+                if error_code == 'ThrottlingException':
+                    if retry_count > 3:
+                        break
+                    retry_count = retry_count + 1
+                    time.sleep(3)
+                    continue
+                else:
+                    raise
+            break
+        return respose
 
     def update_service(
             self, cluster, service, task_definition=None,
@@ -243,9 +280,10 @@ class AwsUtils(object):
                 }
             )
         retry = 0
+        res = None
         while True:
             try:
-                self.client.update_service(**parameters)
+                res = self.client.update_service(**parameters)
                 break
             except ClientError as e:
                 if e.response['Error']['Code'] == 'ThrottlingException':
@@ -254,9 +292,11 @@ class AwsUtils(object):
                     sleep(3)
                     retry += 1
                     continue
+                elif e.response['Error']['Code'] == 'ServiceNotFoundException':
+                    raise EcsServiceNotFoundException()
                 else:
                     raise e
-        return self.describe_service(cluster=cluster, service=service)
+        return res
 
     def wait_for_stable(self, cluster_name: str, service_name: str, delay: int, max_attempts: int):
         # Waiting for the service update is done

@@ -66,7 +66,9 @@ fi
 if [ ! -z "$AWS_ECS_SERVICE_WAIT_DELAY" ]; then
   SERVICE_WAIT_DELAY="--service-wait-delay $AWS_ECS_SERVICE_WAIT_DELAY"
 fi
-
+if [ "$AWS_ECS_SERVICE_UPDATE_ONLY" == 'true' ]; then
+  SERVICE_UPDATE_ONLY="--service-update-only"
+fi
 
 if [ "$AWS_ECS_TEST_TEMPLATES" == 'true' ]; then
     python3 /app/main.py test-templates \
@@ -85,5 +87,6 @@ else
         $NO_STOP_BEFORE_DEPLOY \
         $TASK_DEFINITION \
         $SERVICE_WAIT_MAX_ATTEMPTS \
-        $SERVICE_WAIT_DELAY
+        $SERVICE_WAIT_DELAY \
+        $SERVICE_UPDATE_ONLY \
 fi
