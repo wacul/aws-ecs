@@ -47,7 +47,7 @@ class AwsUtils(object):
                     if retry_count > 6:
                         raise
                     retry_count = retry_count + 1
-                    time.sleep(randint(3, 10))
+                    sleep(randint(3, 10))
                     continue
                 else:
                     raise
@@ -227,7 +227,7 @@ class AwsUtils(object):
                     if retry_count > 6:
                         raise
                     retry_count = retry_count + 1
-                    time.sleep(randint(3, 10))
+                    sleep(randint(3, 10))
                     continue
                 else:
                     raise
@@ -249,7 +249,7 @@ class AwsUtils(object):
                     if retry_count > 3:
                         break
                     retry_count = retry_count + 1
-                    time.sleep(3)
+                    sleep(3)
                     continue
                 else:
                     raise
