@@ -88,5 +88,5 @@ else
         $TASK_DEFINITION \
         $SERVICE_WAIT_MAX_ATTEMPTS \
         $SERVICE_WAIT_DELAY \
-        $SERVICE_UPDATE_ONLY \
+        $SERVICE_UPDATE_ONLY
 fi
