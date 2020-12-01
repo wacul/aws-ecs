@@ -212,7 +212,7 @@ class DeployProcess(Thread):
 
     def __create_service(self, service: ecs.service.Service, is_stop_before_deploy=False):
         desired_count = service.task_environment.desired_count
-        if (is_stop_before_deploy):
+        if is_stop_before_deploy:
             desired_count = 0
         res_service = self.awsutils.create_service(
             cluster=service.task_environment.cluster_name,
@@ -228,7 +228,7 @@ class DeployProcess(Thread):
             network_configuration=service.network_configuration,
             service_registries=service.service_registries,
         )
-        service.update_run_count(describe_service=res_service, is_stop_before_deploy=False)
+        service.update_run_count(describe_service=res_service, is_stop_before_deploy=False, is_create_service=True)
         return res_service
 
     def __update_service(
