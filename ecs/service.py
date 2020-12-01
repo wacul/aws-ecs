@@ -128,11 +128,13 @@ class Service(Deploy):
     def set_task_definition_arn(self, task_definition: dict):
         self.task_definition_arn = task_definition.get('taskDefinitionArn')
 
-    def update_run_count(self, describe_service: dict, is_stop_before_deploy: bool):
+    def update_run_count(self, describe_service: dict, is_stop_before_deploy: bool, is_create_service: bool=False):
         self.running_count = describe_service.get('runningCount')
         self.desired_count = describe_service.get('desiredCount')
         if (is_stop_before_deploy and self.origin_desired_count is None):
             self.origin_desired_count = describe_service.get('runningCount')
+        if is_create_service:
+            self.origin_desired_count = self.desired_count
 
     def compare_container_definition(self):
         a = self.origin_task_definition['containerDefinitions']
