@@ -255,7 +255,7 @@ class AwsUtils(object):
                 else:
                     raise
             break
-        return respose
+        return response
 
     def update_service(
             self, cluster, service, task_definition=None,
