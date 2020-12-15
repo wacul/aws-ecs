@@ -22,13 +22,14 @@ from ecs.utils import h1, h2, success, error, info
 
 class DeployProcess(Thread):
     def __init__(self, task_queue, key, secret, region, is_service_zero_keep, is_stop_before_deploy,
-                 is_service_update_only, service_wait_max_attempts, service_wait_delay):
+                 is_service_update_only, is_task_definition_update_only, service_wait_max_attempts, service_wait_delay):
         super().__init__()
         self.task_queue = task_queue
         self.awsutils = AwsUtils(access_key=key, secret_key=secret, region=region)
         self.is_service_zero_keep = is_service_zero_keep
         self.is_stop_before_deploy = is_stop_before_deploy
         self.is_service_update_only = is_service_update_only
+        self.is_task_definition_update_only = is_task_definition_update_only
         self.service_wait_max_attempts = service_wait_max_attempts
         self.service_wait_delay = service_wait_delay
 
@@ -148,11 +149,15 @@ class DeployProcess(Thread):
         success(message)
 
     def process_service(self, service: ecs.service.Service):
+        message = None
         if not self.is_service_update_only:
             self.__register_task_definition(service)
-        self.__update_service(service=service, desired_count=service.task_environment.desired_count)
-        message = """Deploy Service '{service.service_name}' succeeded.\033[39m""".format(service=service)
+        if not self.is_task_definition_update_only:
+            self.__update_service(service=service, desired_count=service.task_environment.desired_count)
+            message = """Deploy Service '{service.service_name}' succeeded.\033[39m""".format(service=service)
         if not self.is_service_update_only:
+            if message is None:
+                message = """Register Task Definition '{service.service_name}.\033[39m'""".format(service=service)
             if service.is_same_task_definition:
                 message += """
    - task definition is same. Did not register."""
@@ -307,6 +312,7 @@ class DeployManager(object):
         self.is_stop_before_deploy = True
         self.is_delete_unused_service = True
         self.is_service_update_only = False
+        self.is_task_definition_update_only = False
         self.force = False
 
     def _service_config(self):
@@ -332,6 +338,7 @@ class DeployManager(object):
         self.is_delete_unused_service = self._args.delete_unused_service
         self.is_stop_before_deploy = self._args.stop_before_deploy
         self.is_service_update_only = self._args.service_update_only
+        self.is_task_definition_update_only = self._args.task_definition_update_only
 
     def _set_deploy_list(self):
         for service in self.all_deploy_target_service_list:
@@ -363,6 +370,7 @@ class DeployManager(object):
                 is_service_zero_keep=self.is_service_zero_keep,
                 is_stop_before_deploy=self.is_stop_before_deploy,
                 is_service_update_only=self.is_service_update_only,
+                is_task_definition_update_only=self.is_task_definition_update_only,
                 service_wait_max_attempts=self.service_wait_max_attempts,
                 service_wait_delay=self.service_wait_delay
             )
@@ -375,20 +383,28 @@ class DeployManager(object):
         if not self.is_service_update_only:
             self._fetch_ecs_information()
 
+        if not (self.is_service_update_only or self.is_task_definition_update_only):
             # Step: Delete Unused Service
             self._delete_unused()
+
+        if not self.is_service_update_only:
             self._check_deploy()
 
         self._set_deploy_list()
 
-        self._stop_scheduled_task()
-        self._stop_before_deploy()
+        if not (self.is_service_update_only or self.is_task_definition_update_only):
+            self._stop_scheduled_task()
+        if not self.is_task_definition_update_only:
+            self._stop_before_deploy()
         self._deploy_service()
-        self._start_after_deploy()
-        if not self.is_service_update_only:
+        if not self.is_task_definition_update_only:
+            self._start_after_deploy()
+
+        if not (self.is_service_update_only or self.is_task_definition_update_only):
             self._deploy_scheduled_task()
 
-        self._result_check()
+        if not self.is_service_update_only:
+            self._result_check()
 
     def dry_run(self):
         self._service_config()

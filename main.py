@@ -45,6 +45,7 @@ def init():
     service_parser.add_argument('--no-delete-unused-service', dest='delete_unused_service', default=True,
                                 action='store_false')
     service_parser.add_argument('--service-update-only', dest='service_update_only', default=False, action='store_true')
+    service_parser.add_argument('--task-definition-update-only', dest='task_definition_update_only', default=False, action='store_true')
 
     test_templates_parser = subparser.add_parser("test-templates")
     test_templates_parser.add_argument('--task-definition-template-dir')
@@ -66,18 +67,9 @@ def init():
     delete_parser.add_argument('--force', action='store_true', default=False)
 
     argp = parser.parse_args()
-    if argp.command == 'test-templates':
-        if argp.task_definition_template_dir is None and argp.services_yaml is None:
-            logger.error(
-                "the following arguments are required:"
-                " (--task-definition-template-file and --task-definition-config-json)"
-                " or (--services-yaml and --environment-yaml-dir)")
-            sys.exit(1)
-        elif argp.services_yaml is not None and argp.environment_yaml_dir is None:
-            logger.error("the following arguments are required: --environment-yaml-dir")
-            sys.exit(1)
-        elif argp.task_definition_template_dir is not None and argp.task_definition_config_json is None:
-            logger.error("the following arguments are required: --task-definition-config-json")
+    if argp.command == 'service':
+        if argp.task_definition_update_only and argp.service_update_only:
+            logger.error("Both --service-update-only and --task-definition-update-only cannnot be set.")
             sys.exit(1)
     return argp
 

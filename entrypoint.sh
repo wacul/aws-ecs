@@ -69,6 +69,9 @@ fi
 if [ "$AWS_ECS_SERVICE_UPDATE_ONLY" == 'true' ]; then
   SERVICE_UPDATE_ONLY="--service-update-only"
 fi
+if [ "$AWS_ECS_TASK_DEFINITION_UPDATE_ONLY" == 'true' ]; then
+  TASK_DEFINITION_UPDATE_ONLY="--task-definition-update-only"
+fi
 
 if [ "$AWS_ECS_TEST_TEMPLATES" == 'true' ]; then
     python3 /app/main.py test-templates \
@@ -88,5 +91,6 @@ else
         $TASK_DEFINITION \
         $SERVICE_WAIT_MAX_ATTEMPTS \
         $SERVICE_WAIT_DELAY \
-        $SERVICE_UPDATE_ONLY
+        $SERVICE_UPDATE_ONLY \
+        $TASK_DEFINITION_UPDATE_ONLY
 fi
