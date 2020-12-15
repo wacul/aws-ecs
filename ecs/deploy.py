@@ -403,7 +403,7 @@ class DeployManager(object):
         if not (self.is_service_update_only or self.is_task_definition_update_only):
             self._deploy_scheduled_task()
 
-        if not self.is_service_update_only:
+        if not self.is_task_definition_update_only:
             self._result_check()
 
     def dry_run(self):
