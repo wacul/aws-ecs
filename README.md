@@ -1,4 +1,5 @@
-Wercker step AND github actions for AWS ECS
+# Wercker step AND github actions for AWS ECS
+
 =======================
 
 The step is written in Python 3.5 and use Pip and Boto3 module.
@@ -6,7 +7,6 @@ The step is written in Python 3.5 and use Pip and Boto3 module.
 ## Example
 
 #### options
-
 
 * `key` (optional): AWS Access Key ID
 * `secret` (optional): AWS Secret Access Key
@@ -20,6 +20,7 @@ The step is written in Python 3.5 and use Pip and Boto3 module.
 * `service-zero-keep` (optional): when deployment, if ecs service with desired count 0, keep service desired count 0. (default: true)
 * `stop-before-deploy` (optional): If this value is false, `stopBeforeDeploy` option in `services-yml` is ignored.  (default: true)
 * `service-update-only` (optional): If this value is true,  Do not delete service and register in task definition. (default: false)
+* `task-definition-update-only` (optional): If this value is true, Just update task definition. (default: false)'
 
 test templates
 

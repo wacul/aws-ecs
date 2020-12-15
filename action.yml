@@ -24,11 +24,15 @@ inputs:
     description: 'For multiple repositories ecs cluster deployment. When delete unused service with multiple repositories deployment, service and scheduled task settings exists for each repository. Then, only matches between template-group and ecs task-definition`s environment TEMPLATE_GROUP value are targeted.'
     required: false
   service-update-only:
-    description: 'If this value is false, `stopBeforeDeploy` option in `services-yml` is ignored.  (default: true)'
-    required: false
-  stop-before-deploy:
     description: 'If this value is true,  Do not delete service and register in task definition. (default: false)'
     required: false
+  stop-before-deploy:
+    description: 'If this value is false, `stopBeforeDeploy` option in `services-yml` is ignored.  (default: true)'
+    required: false
+  task-definition-update-only:
+    description: 'If this value is true,  Just update task definition. (default: false)'
+    required: false
+
 runs:
   using: 'docker'
   image: 'docker://wacul/aws-ecs:latest'
@@ -42,4 +46,5 @@ runs:
     AWS_ECS_DEPLOY_SERVICE_GROUP: ${{ inputs.deploy-service-group }}
     AWS_ECS_SERVICE_UPDATE_ONLY: ${{ inputs.service-update-only }}
     AWS_ECS_STOP_BEFORE_DEPLOY: ${{ inputs.stop-before-deploy }}
+    AWS_ECS_TASK_DEFINITION_UPDATE_ONLY: ${{ inputs.task-definition-update-only }}
   entrypoint: '/app/entrypoint.sh'
