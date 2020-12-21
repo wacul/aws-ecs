@@ -112,7 +112,6 @@ class Service(Deploy):
         self.origin_desired_count = None
         self.task_definition_arn = None
         self.origin_service_exists = False
-        self.is_same_task_definition = False
         self.running_count = 0
 
         super().__init__(self.service_name, target_type=DeployTargetType.service)
@@ -137,17 +136,19 @@ class Service(Deploy):
             self.origin_desired_count = self.desired_count
 
     def compare_container_definition(self):
-        a = self.origin_task_definition['containerDefinitions']
-        b = self.task_definition['containerDefinitions']
-        ad = adjust_container_definition(a)
-        bd = adjust_container_definition(b)
-        self.is_same_task_definition = is_same_container_definition(ad, bd)
-        if self.is_same_task_definition:
+        if self.is_same_task_definition():
             self.task_definition_arn = self.origin_task_definition_arn
             return "    - Container Definition is not changed."
         else:
+            ad = adjust_container_definition(self.origin_task_definition['containerDefinitions'])
+            bd = adjust_container_definition(self.task_definition['containerDefinitions'])
             t = diff(ad, bd)
             return "    - Container is changed. Diff:\n{t}".format(t=t)
+
+    def is_same_task_definition(self):
+        ad = adjust_container_definition(self.origin_task_definition['containerDefinitions'])
+        bd = adjust_container_definition(self.task_definition['containerDefinitions'])
+        return is_same_container_definition(ad, bd)
 
 
 def arn_to_name(arn):

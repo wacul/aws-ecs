@@ -138,7 +138,6 @@ class ScheduledTask(Deploy):
         self.origin_task_definition = None
         self.origin_task_environment = None
         self.task_definition_arn = None
-        self.is_same_task_definition = False
 
         super().__init__(self.family, target_type=DeployTargetType.scheduled_task)
 
@@ -150,17 +149,19 @@ class ScheduledTask(Deploy):
         self.task_exists = True
 
     def compare_container_definition(self):
-        a = self.origin_task_definition['containerDefinitions']
-        b = self.task_definition['containerDefinitions']
-        ad = adjust_container_definition(a)
-        bd = adjust_container_definition(b)
-        self.is_same_task_definition = is_same_container_definition(ad, bd)
-        if self.is_same_task_definition:
+        if self.is_same_task_definition():
             self.task_definition_arn = self.origin_task_definition_arn
             return "    - Container Definition is not changed."
         else:
+            ad = adjust_container_definition(self.origin_task_definition['containerDefinitions'])
+            bd = adjust_container_definition(self.task_definition['containerDefinitions'])
             t = diff(ad, bd)
             return "    - Container is changed. Diff:\n{t}".format(t=t)
+
+    def is_same_task_definition(self):
+        ad = adjust_container_definition(self.origin_task_definition['containerDefinitions'])
+        bd = adjust_container_definition(self.task_definition['containerDefinitions'])
+        return is_same_container_definition(ad, bd)
 
 
 def get_deploy_scheduled_task_list(task_list, deploy_service_group, template_group):
