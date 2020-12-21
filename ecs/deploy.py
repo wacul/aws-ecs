@@ -124,7 +124,7 @@ class DeployProcess(Thread):
         cloud_watch_event_rule.set_from_task_definition(task_definition)
 
     def deploy_scheduled_task(self, scheduled_task: ScheduledTask):
-        if not scheduled_task.is_same_task_definition:
+        if not scheduled_task.is_same_task_definition():
             res_reg = self.awsutils.register_task_definition(task_definition=scheduled_task.task_definition)
             scheduled_task.task_definition_arn = res_reg['taskDefinitionArn']
         self.awsutils.create_scheduled_task(
@@ -134,7 +134,7 @@ class DeployProcess(Thread):
    - Cloudwatch Event State: {scheduled_task.state.value}"""\
             .format(scheduled_task=scheduled_task)
 
-        if scheduled_task.is_same_task_definition:
+        if scheduled_task.is_same_task_definition():
             message += """
    - task definition is same. Did not register."""
         else:
@@ -158,7 +158,7 @@ class DeployProcess(Thread):
         if not self.is_service_update_only:
             if message is None:
                 message = """Register Task Definition '{service.service_name}.\033[39m'""".format(service=service)
-            if service.is_same_task_definition:
+            if service.is_same_task_definition():
                 message += """
    - task definition is same. Did not register."""
             else:
@@ -241,11 +241,14 @@ class DeployProcess(Thread):
     ):
         if self.is_service_zero_keep and service.origin_desired_count == 0:
             desired_count = 0
+        task_definition = service.task_definition_arn
+        if task_definition is None:
+            task_definition = service.task_definition.get('family')
         try:
             res_service = self.awsutils.update_service(
                 cluster=service.task_environment.cluster_name,
                 service=service.service_name,
-                task_definition=service.task_definition_arn,
+                task_definition=task_definition,
                 maximum_percent=service.task_environment.maximum_percent,
                 minimum_healthy_percent=service.task_environment.minimum_healthy_percent,
                 desired_count=desired_count,
@@ -263,7 +266,7 @@ class DeployProcess(Thread):
 
     def __register_task_definition(self, service: ecs.service.Service):
         # if same task definition, then do not register.
-        if service.is_same_task_definition:
+        if service.is_same_task_definition():
             return
         task_definition = self.awsutils.register_task_definition(task_definition=service.task_definition)
         service.set_task_definition_arn(task_definition)
@@ -607,7 +610,7 @@ def deregister_task_definition(awsutils, service: ecs.service.Service):
     retry_count = 0
     if service.origin_task_definition_arn is None:
         return
-    if service.is_same_task_definition:
+    if service.is_same_task_definition():
         return
     awsutils.deregister_task_definition(service.origin_task_definition_arn)
 
