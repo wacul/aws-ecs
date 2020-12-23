@@ -140,14 +140,18 @@ class Service(Deploy):
             self.task_definition_arn = self.origin_task_definition_arn
             return "    - Container Definition is not changed."
         else:
-            ad = adjust_container_definition(self.origin_task_definition['containerDefinitions'])
-            bd = adjust_container_definition(self.task_definition['containerDefinitions'])
+            if self.origin_task_definition is None:
+                return "     - Origin Container Definition not available."
+            ad = adjust_container_definition(self.origin_task_definition.get('containerDefinitions'))
+            bd = adjust_container_definition(self.task_definition.get('containerDefinitions'))
             t = diff(ad, bd)
             return "    - Container is changed. Diff:\n{t}".format(t=t)
 
     def is_same_task_definition(self):
-        ad = adjust_container_definition(self.origin_task_definition['containerDefinitions'])
-        bd = adjust_container_definition(self.task_definition['containerDefinitions'])
+        if self.origin_task_definition is None:
+            return False
+        ad = adjust_container_definition(self.origin_task_definition.get('containerDefinitions'))
+        bd = adjust_container_definition(self.task_definition.get('containerDefinitions'))
         return is_same_container_definition(ad, bd)
 
 

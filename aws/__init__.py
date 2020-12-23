@@ -295,6 +295,8 @@ class AwsUtils(object):
                     continue
                 elif e.response['Error']['Code'] == 'ServiceNotFoundException':
                     raise EcsServiceNotFoundException()
+                elif e.response['Error']['Code'] == 'ClientException':
+                    raise EcsServiceNotFoundException()
                 else:
                     raise e
         return res
