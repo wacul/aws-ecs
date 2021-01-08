@@ -4,7 +4,6 @@ import os
 import time
 import traceback
 import sys
-from multiprocessing import Queue
 from queue import Queue, Empty
 from threading import Thread
 from botocore.exceptions import WaiterError
@@ -43,7 +42,7 @@ class DeployProcess(Thread):
             # noinspection PyBroadException
             try:
                 self.process(deploy, mode)
-            except:
+            except Exception:
                 deploy.status = ProcessStatus.error
                 error("Unexpected error in `{deploy.name}`.\n{traceback}"
                       .format(deploy=deploy, traceback=traceback.format_exc()))
@@ -86,6 +85,9 @@ class DeployProcess(Thread):
 
         elif mode == ProcessMode.stopBeforeDeploy:
             self.stop_before_deploy(deploy)
+
+        elif mode == ProcessMode.deleteService:
+            self.delete_service(deploy)
 
     def stop_before_deploy(self, service: ecs.service.Service):
         self.__update_service(
@@ -215,6 +217,10 @@ class DeployProcess(Thread):
         success("Checking scheduled task '{scheduled_task.name}' succeeded. \n\033[39m{checks}"
                 .format(scheduled_task=scheduled_task, checks=checks))
 
+    def delete_service(self, service: ecs.service.Service):
+        self.awsutils.delete_service(service.cluster_name, service.service_name)
+        success("Delete service '{service.service_name}'".format(service=service))
+
     def __create_service(self, service: ecs.service.Service, is_stop_before_deploy=False):
         desired_count = service.task_environment.desired_count
         if is_stop_before_deploy:
@@ -324,14 +330,14 @@ class DeployManager(object):
             self.scheduled_task_list,\
             self.deploy_scheduled_task_list,\
             self.environment = get_deploy_list(
-                    services_yaml=self._args.services_yaml,
-                    environment_yaml=self._args.environment_yaml,
-                    task_definition_template_dir=self._args.task_definition_template_dir,
-                    task_definition_config_json=self._args.task_definition_config_json,
-                    task_definition_config_env=self._args.task_definition_config_env,
-                    deploy_service_group=self._args.deploy_service_group,
-                    template_group=self._args.template_group
-                )
+                services_yaml=self._args.services_yaml,
+                environment_yaml=self._args.environment_yaml,
+                task_definition_template_dir=self._args.task_definition_template_dir,
+                task_definition_config_json=self._args.task_definition_config_json,
+                task_definition_config_env=self._args.task_definition_config_env,
+                deploy_service_group=self._args.deploy_service_group,
+                template_group=self._args.template_group
+            )
         # thread数がタスクの数を超えているなら減らす
         deploy_size = len(self.deploy_scheduled_task_list) + len(self.all_deploy_target_service_list)
         if deploy_size < self.threads_count:
@@ -364,7 +370,7 @@ class DeployManager(object):
 
     def _start_threads(self):
         # threadの開始
-        for i in range(self.threads_count):
+        for _ in range(self.threads_count):
             thread = DeployProcess(
                 task_queue=self.task_queue,
                 key=self.key,
@@ -494,10 +500,10 @@ class DeployManager(object):
             return
         if len(self.delete_service_list) == 0 and len(self.delete_scheduled_task_list) == 0:
             info("There was no service or task to delete.")
-        for delete_service in self.delete_service_list:
-            success("Delete service '{delete_service.service_name}'".format(delete_service=delete_service))
+        for service in self.delete_service_list:
             if not dry_run:
-                self.awsutils.delete_service(delete_service.cluster_name, delete_service.service_name)
+                self.task_queue.put([service, ProcessMode.deleteService])
+        self.task_queue.join()
         for delete_scheduled_task in self.delete_scheduled_task_list:
             success("Delete scheduled task '{delete_scheduled_task.name}'"
                     .format(delete_scheduled_task=delete_scheduled_task))
@@ -607,7 +613,6 @@ class DeployManager(object):
 
 
 def deregister_task_definition(awsutils, service: ecs.service.Service):
-    retry_count = 0
     if service.origin_task_definition_arn is None:
         return
     if service.is_same_task_definition():
